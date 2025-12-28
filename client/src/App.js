@@ -52,17 +52,26 @@ function App() {
     
     // NEW: TIME SYNC LISTENER
     socket.on("receive_time", (hostTime) => {
-      if (role === "host") return; // Host is the master, ignore updates
+      if (role === "host") return; // Host determines the time
       if (!playerRef.current) return;
 
       try {
         const myTime = playerRef.current.getCurrentTime();
-        const diff = Math.abs(myTime - hostTime);
+        
+        // 1. LATENCY COMPENSATION
+        // Assume it took ~350ms for the signal to travel from Host -> Server -> You
+        const estimatedHostTime = hostTime + 0.35; 
 
-        // If drift is > 2 seconds, snap to host time
-        if (diff > 2) {
-          console.log(`Resyncing: I'm at ${myTime}, Host is at ${hostTime}`);
-          playerRef.current.seekTo(hostTime, true);
+        const diff = Math.abs(myTime - estimatedHostTime);
+
+        // 2. TIGHTER THRESHOLD (0.8 seconds)
+        // If we are off by more than 0.8s, we fix it.
+        // (Anything less than 0.8s is usually indistinguishable to the ear)
+        if (diff > 0.8) {
+          console.log(`Sync Drift: ${diff.toFixed(2)}s. Correcting...`);
+          
+          // Seek to the FUTURE time (where the host will be by the time we buffer)
+          playerRef.current.seekTo(estimatedHostTime, true);
         }
       } catch (error) {
         console.error("Sync error:", error);
@@ -90,7 +99,7 @@ function App() {
             socket.emit("time_update", { room, time: currentTime });
           } catch (e) { /* Player not ready */ }
         }
-      }, 1000); // Broadcast every second
+      }, 500); // Broadcast every second
     }
 
     return () => {
