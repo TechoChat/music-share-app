@@ -3,7 +3,7 @@ import io from "socket.io-client";
 import YouTube from "react-youtube";
 import "./App.css";
 
-// const socket = io.connect("http://localhost:3001");
+// REPLACE WITH YOUR RENDER URL
 const socket = io.connect("https://music-share-app-wv5p.onrender.com");
 
 function App() {
@@ -12,62 +12,94 @@ function App() {
   const [role, setRole] = useState("");
   const [videoId, setVideoId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [queue, setQueue] = useState([]); // Queue state
+  const [queue, setQueue] = useState([]);
   
-  // UI state for play/pause
   const [isPlaying, setIsPlaying] = useState(false);
-
   const playerRef = useRef(null);
 
+  // --- SOCKET LISTENERS ---
   useEffect(() => {
     socket.on("user_role", (role) => {
       setRole(role);
     });
 
     socket.on("receive_song", (id) => {
-      setVideoId(id); // Update UI state
-      setIsPlaying(true); // Ensure UI shows "Playing"
+      setVideoId(id);
+      setIsPlaying(true);
       
-      // CRITICAL FIX: Directly tell the player to load the new video
-      // This bypasses React's render delay and ensures smooth transition
+      // Force load to prevent "Paused" state on new tracks
       if (playerRef.current && playerRef.current.internalPlayer) {
-        // .internalPlayer is specific to react-youtube to access raw API
         playerRef.current.internalPlayer.loadVideoById(id);
-      } 
-      // Fallback for standard ref usage
-      else if (playerRef.current && typeof playerRef.current.loadVideoById === "function") {
-         playerRef.current.loadVideoById(id);
+      } else if (playerRef.current && playerRef.current.loadVideoById) {
+        playerRef.current.loadVideoById(id);
       }
     });
-    
+
     socket.on("receive_action", (action) => {
       if (action === "play") {
         setIsPlaying(true);
-        if (playerRef.current) {
-          playerRef.current.playVideo();
-        }
+        if (playerRef.current) playerRef.current.playVideo();
       }
       if (action === "pause") {
         setIsPlaying(false);
-        if (playerRef.current) {
-          playerRef.current.pauseVideo();
-        }
+        if (playerRef.current) playerRef.current.pauseVideo();
       }
     });
-    
-    // Listen for queue updates from server
+
     socket.on("update_queue", (newQueue) => {
       setQueue(newQueue);
     });
     
-    // Cleanup on unmount
+    // NEW: TIME SYNC LISTENER
+    socket.on("receive_time", (hostTime) => {
+      if (role === "host") return; // Host is the master, ignore updates
+      if (!playerRef.current) return;
+
+      try {
+        const myTime = playerRef.current.getCurrentTime();
+        const diff = Math.abs(myTime - hostTime);
+
+        // If drift is > 2 seconds, snap to host time
+        if (diff > 2) {
+          console.log(`Resyncing: I'm at ${myTime}, Host is at ${hostTime}`);
+          playerRef.current.seekTo(hostTime, true);
+        }
+      } catch (error) {
+        console.error("Sync error:", error);
+      }
+    });
+
     return () => {
       socket.off("user_role");
       socket.off("receive_song");
       socket.off("receive_action");
       socket.off("update_queue");
+      socket.off("receive_time");
     };
-  }, []);
+  }, [role]); // Re-bind if role changes
+
+  // --- HOST SYNC BROADCASTER ---
+  useEffect(() => {
+    let interval = null;
+
+    if (role === "host" && isPlaying) {
+      interval = setInterval(() => {
+        if (playerRef.current && playerRef.current.getCurrentTime) {
+          try {
+            const currentTime = playerRef.current.getCurrentTime();
+            socket.emit("time_update", { room, time: currentTime });
+          } catch (e) { /* Player not ready */ }
+        }
+      }, 1000); // Broadcast every second
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [role, isPlaying, room]);
+
+
+  // --- ROOM ACTIONS ---
 
   const joinRoom = () => {
     if (room !== "") {
@@ -92,81 +124,60 @@ function App() {
     return () => { window.removeEventListener('beforeunload', handleTabClose); };
   }, []);
 
-  // --- HOST CONTROLS ---
+  // --- PLAYER CONTROLS ---
 
-  // 1. Play Now (Clears current song and plays new one)
   const loadSong = () => {
     if (!searchQuery) return;
     socket.emit("play_song", { room, videoId: searchQuery });
     setSearchQuery("");
   };
 
-  // 2. Add to Queue
   const addToQueue = () => {
     if (!searchQuery) return;
     socket.emit("add_to_queue", { room, videoId: searchQuery });
     setSearchQuery("");
   };
 
-  // 3. Play Next (Manually or Automatically)
   const playNext = () => {
     if (queue.length > 0) {
       socket.emit("play_next", { room });
-    } else {
-      console.log("Queue is empty");
     }
   };
 
   const handlePlayerStateChange = (event) => {
     if (role === "host") {
       const playerState = event.data;
-      
       // 1 = Playing, 2 = Paused, 0 = Ended
       if (playerState === 1) {
         socket.emit("player_action", { room, action: "play" });
-        setIsPlaying(true); 
+        setIsPlaying(true);
       }
       if (playerState === 2) {
         socket.emit("player_action", { room, action: "pause" });
-        setIsPlaying(false); 
+        setIsPlaying(false);
       }
       if (playerState === 0) {
-        // Song ended -> Auto-play next song
-        playNext();
+        playNext(); // Auto-play next song
       }
     }
   };
 
-  // --- PLAYER CONFIG ---
-
-  const opts = {
-    height: "0",
-    width: "0",
-    playerVars: { 
-      autoplay: 1, // Crucial: Auto-plays when loaded
-      controls: 0 
-    },
-  };
-
-  // CRITICAL FIX: onReady handler
-  // When a new user joins, their player loads. 
-  // If the room is already playing, we must force their player to start.
   const onPlayerReady = (event) => {
     playerRef.current = event.target;
-    
-    // If the global state says we should be playing, force it now.
+    // If joining a room that is already playing, force play
     if (isPlaying) {
       event.target.playVideo();
     }
   };
 
-  const togglePlay = () => {
-    if (playerRef.current) playerRef.current.playVideo();
+  const opts = {
+    height: "0",
+    width: "0",
+    playerVars: { autoplay: 1, controls: 0 },
   };
 
-  const togglePause = () => {
-    if (playerRef.current) playerRef.current.pauseVideo();
-  };
+  const togglePlay = () => { if (playerRef.current) playerRef.current.playVideo(); };
+  const togglePause = () => { if (playerRef.current) playerRef.current.pauseVideo(); };
 
   return (
     <div className="App">
@@ -187,16 +198,12 @@ function App() {
           </div>
 
           <div className="audio-interface">
-            {/* Dynamic Album Art */}
             <div className={`album-art ${isPlaying ? "pulse" : ""}`}>
               {isPlaying ? "🔊" : "🎵"}
             </div>
-            
             <div className="track-info">
               <h3>{videoId ? "Now Playing" : "No Song Selected"}</h3>
               <p>ID: {videoId}</p>
-              
-              {/* Status Text */}
               <div className={`status-badge ${isPlaying ? "playing" : "paused"}`}>
                 {videoId ? (isPlaying ? "▶ Playing" : "⏸ Paused") : "Waiting for song..."}
               </div>
@@ -207,12 +214,11 @@ function App() {
             <YouTube
               videoId={videoId}
               opts={opts}
-              onReady={onPlayerReady} // Updated handler
+              onReady={onPlayerReady}
               onStateChange={handlePlayerStateChange}
             />
           </div>
 
-          {/* HOST CONTROLS */}
           {role === "host" && (
             <div className="admin-controls">
               <div className="search-bar">
@@ -235,11 +241,10 @@ function App() {
 
           {role === "listener" && (
             <p style={{ marginTop: "20px", color: "#888" }}>
-              {isPlaying ? "Listen along! 🎧" : "Host has paused the music."}
+              {isPlaying ? "Syncing with host... 🎧" : "Host has paused the music."}
             </p>
           )}
 
-          {/* QUEUE DISPLAY (Visible to everyone) */}
           <div className="queue-container">
             <h3>Up Next ({queue.length})</h3>
             <ul className="queue-list">
