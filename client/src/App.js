@@ -3,7 +3,8 @@ import io from "socket.io-client";
 import YouTube from "react-youtube";
 import "./App.css";
 
-const socket = io.connect("http://localhost:3001");
+// const socket = io.connect("http://localhost:3001");
+const socket = io.connect("https://music-share-app-wv5p.onrender.com");
 
 function App() {
   const [room, setRoom] = useState("");
