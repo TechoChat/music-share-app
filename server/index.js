@@ -57,18 +57,20 @@ const generateName = () => {
 
 // ... existing code ...
 
-    // Updated join_room to accept Object { roomId, username }
+    // Updated join_room to accept Object { roomId, username, create }
     socket.on("join_room", (data) => {
     let roomId = "";
     let username = "";
+    let isCreate = false;
     
-    // Support both old (string) and new (object) formats for backward compatibility during dev
+    // Support both old (string) and new (object) formats
     if (typeof data === "string") {
        roomId = data;
        username = generateName(); // Fallback
     } else {
        roomId = data.roomId;
        username = data.username || generateName();
+       isCreate = data.create === true;
     }
 
     // 1. ZOMBIE ROOM CLEANUP
@@ -76,19 +78,19 @@ const generateName = () => {
       const roomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
       if (roomSize === 0) {
         console.log(`⚠️ Cleaning up empty room: ${roomId}`);
-        delete rooms[roomId];
-        broadcastRooms(); // Update list
+        delete rooms[roomId]; // We delete it, so if they tried to join, it will fail below
+        broadcastRooms(); 
       }
     }
 
-    socket.join(roomId);
-    socket.currentRoom = roomId;
-    socket.username = username; // Use provided Name
-
-    console.log(`User ${socket.id} (${username}) joining ${roomId}`);
-
     // 2. CHECK IF ROOM EXISTS
     if (!rooms[roomId]) {
+      if (!isCreate) {
+          // If trying to JOIN but room doesn't exist -> FAIL
+          socket.emit("error", "Room does not exist."); // Client needs to handle this ALERT
+          return;
+      }
+
       // Create new room
       rooms[roomId] = { 
         host: socket.id, 
@@ -98,13 +100,20 @@ const generateName = () => {
         lastKnownTime: 0,
         lastTimestamp: 0,
         queue: [],
-        users: [] // Track users explicitly
+        users: [] 
       };
       socket.emit("user_role", "host");
       console.log(`✅ Room ${roomId} created. Host: ${socket.id}`);
       broadcastRooms(); 
     } else {
-      // Room exists... BUT IS THE HOST ALIVE?
+      // Room exists
+      if (isCreate) {
+          // If trying to CREATE but exists -> Technically collision, but we can treat as join or error.
+          // For simplicity, let's just join them as Listener, or better, warn them?
+          // Since ID is 4-digit random, collision is rare but possible.
+          // Let's just join them.
+      }
+      
       const currentHostId = rooms[roomId].host;
       const isHostAlive = io.sockets.sockets.get(currentHostId);
 
@@ -126,14 +135,18 @@ const generateName = () => {
         queue: rooms[roomId].queue
       });
     }
+
+    socket.join(roomId);
+    socket.currentRoom = roomId;
+    socket.username = username;
+    console.log(`User ${socket.id} (${username}) joining ${roomId}`);
     
     // ADD USER TO LIST
-    // Remove if exists to avoid dupes
     rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
     rooms[roomId].users.push({ id: socket.id, name: socket.username });
     
-    io.to(roomId).emit("update_users", rooms[roomId].users); // Broadcast new list inside room
-    broadcastRooms(); // Update home screen counts immediately
+    io.to(roomId).emit("update_users", rooms[roomId].users); 
+    broadcastRooms(); 
   });
 
   // --- PLAYBACK HANDLERS ---
@@ -246,11 +259,13 @@ const generateName = () => {
          rooms[roomId].host = newHostId;
          io.to(newHostId).emit("user_role", "host");
          console.log(`👑 New Host assigned: ${newHostId}`);
-       } else {
          delete rooms[roomId];
          console.log(`🗑️ Room ${roomId} deleted (Empty).`);
        }
     }
+    
+    // Broadcast updates to home screen (count change or room deletion)
+    broadcastRooms();
   };
 
   socket.on("leave_room", () => {

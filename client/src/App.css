@@ -441,6 +441,30 @@ body {
 .pb-right { width: 30%; display: flex; justify-content: flex-end; }
 
 
+/* --- SPINNER --- */
+.spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 10px;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* --- CLOSE BUTTON --- */
+.close-search-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.2rem;
+  margin-left: 10px;
+  cursor: pointer;
+  padding: 0 5px;
+}
+.close-search-btn:hover { color: #fff; }
+
 /* --- MOBILE STYLES (< 768px) --- */
 .mobile-nav { display: none; } /* Default hidden on desktop */
 
@@ -502,25 +526,51 @@ body {
     position: fixed;
     bottom: var(--mobile-nav-height); /* Stacked above nav */
     left: 0; right: 0;
-    height: 70px;
-    padding: 0 15px;
+    height: 90px; /* Increased height for progress bar */
+    padding: 10px 15px;
     background: rgba(24,24,24,0.98);
     border-top: 1px solid #333;
-    /* z-index: 1900; */
+    display: flex;
+    flex-direction: column; /* Stack controls and progress */
   }
   
-  .pb-info h4 { max-width: 150px; }
-  .pb-center { 
-    width: auto; 
-    flex-direction: row; /* Horizontal on mobile */
-    align-items: center; 
-    margin-left: auto; /* Push to right */
+  .pb-left { width: 100%; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between; }
+  .pb-art { width: 40px; height: 40px; font-size: 1.2rem; margin-right: 10px; }
+  .pb-info { flex: 1; }
+  .pb-info h4 { max-width: 200px; font-size: 0.9rem; }
+  
+  /* Controls next to Title on Mobile (Optional) or separate row? */
+  /* Let's put Grid logic: Row 1 = [Art] [Title/Info] [PlayBtn] [NextBtn] */
+  /* Row 2 = Progress Bar */
+  
+  .pb-left { 
+    width: 100%; 
+    justify-content: flex-start; 
+    margin-bottom: 0;
   }
-  .pb-controls { margin: 0; gap: 15px; }
-  .pb-progress-row { display: none; } /* Hide progress bar on mobile */
+  .pb-center {
+    width: 100%;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .pb-controls { 
+      position: absolute; 
+      right: 15px; 
+      top: 15px;
+      gap: 15px;
+  }
+
+  .pb-progress-row { 
+    display: flex; /* SHOW ON MOBILE */
+    width: 100%;
+    font-size: 0.65rem;
+    margin-top: 5px;
+  }
+  
   .pb-right { display: none; }
   
-  /* Bigger play button for mobile touch */
   .pb-btn { font-size: 1.5rem; }
-  .pb-btn.play-pause { width: 40px; height: 40px; font-size: 1.2rem; }
+  .pb-btn.play-pause { width: 32px; height: 32px; font-size: 1rem; }
 }

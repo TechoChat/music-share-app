@@ -6,6 +6,15 @@ import "./App.css";
 // REPLACE WITH YOUR RENDER URL
 const socket = io.connect("https://music-share-app-wv5p.onrender.com");
 
+const animals = ["Panda", "Giraffe", "Lion", "Tiger", "Koala", "Penguin", "Eagle", "Falcon", "Otter", "Fox"];
+const adjectives = ["Cool", "Happy", "Swift", "Brave", "Calm", "Fierce", "Lucky", "Wise", "Epic", "Neon"];
+
+const generateName = () => {
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const animal = animals[Math.floor(Math.random() * animals.length)];
+    return `${adj} ${animal}`;
+};
+
 function App() {
   const [room, setRoom] = useState("");
   const [isInRoom, setIsInRoom] = useState(false);
@@ -17,7 +26,6 @@ function App() {
   const [queue, setQueue] = useState([]);
   
   // SYNC STATE
-  const [clockOffset, setClockOffset] = useState(0); 
   const clockOffsetRef = useRef(0); // Ref to avoid stale closures in socket usage
   const latestSyncPacket = useRef(null); // Store last packet for late-join catchup
 
@@ -39,13 +47,6 @@ function App() {
             const t1 = response.serverTime;
             const t2 = Date.now();
             const latency = (t2 - t0) / 2;
-            const offset = t1 - t2 + latency; // t1 = server time, t2 = local receipt time. 
-            // Correct formula: ClientTime + Offset = ServerTime => Offset = ServerTime - ClientTime
-            // We use t2 (msg received) as "now". At t2, Server was at t1 + latency (approx).
-            // Actually: 
-            // Server = t1. Client = t0. Latency = (t2 - t0) / 2.
-            // At moment t1 (server), Client was at t0 + latency.
-            // Offset = t1 - (t0 + latency).
             
             pings.push(t1 - (t0 + latency));
             resolve();
@@ -58,7 +59,6 @@ function App() {
       const medianOffset = pings[Math.floor(pings.length / 2)];
       
       console.log("Clock Offset Calculated:", medianOffset, "ms");
-      setClockOffset(medianOffset);
       clockOffsetRef.current = medianOffset; // Update Ref
       setSyncStatus(`Synced (Offset: ${Math.round(medianOffset)}ms)`);
     };
@@ -77,15 +77,30 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const [isSearching, setIsSearching] = useState(false); // NEW: Search loading state
+
   // --- SOCKET LISTENERS (Updated) ---
   useEffect(() => {
-    socket.on("user_role", setRole);
+    socket.on("user_role", (r) => {
+        setRole(r);
+        setIsInRoom(true); // Only enter when role is assigned
+    });
+    
     socket.on("receive_song", (id) => {
       setVideoId(id);
-      // Removed setIsPlaying(true) - wait for explicit play/pause action or sync
-      
-      if (playerRef.current?.internalPlayer) playerRef.current.internalPlayer.loadVideoById(id);
-      else if (playerRef.current?.loadVideoById) playerRef.current.loadVideoById(id);
+      setIsPlaying(true); // Optimistically set playing state
+
+      // Fix: Force play after loading
+      if (playerRef.current) {
+         const player = playerRef.current.internalPlayer || playerRef.current;
+         if (player && player.loadVideoById) {
+             player.loadVideoById(id);
+             // Short timeout to ensure load finishes before play command
+             setTimeout(() => {
+                 if (player.playVideo) player.playVideo();
+             }, 300);
+         }
+      }
     });
 
     socket.on("receive_action", (action) => {
@@ -93,6 +108,7 @@ function App() {
       if (action === "pause") { setIsPlaying(false); playerRef.current?.pauseVideo(); }
     });
     
+    // ... (keep initial_sync, update_queue, receive_time) ...
     // NEW: INITIAL SYNC FOR JOINERS
     socket.on("initial_sync", (data) => {
        console.log("Initial Sync Data:", data);
@@ -130,13 +146,25 @@ function App() {
       } catch (e) { }
     });
 
-    socket.on("search_results", setSearchResults);
+    socket.on("search_results", (results) => {
+        setSearchResults(results);
+        setIsSearching(false); // Stop loading
+    });
+    
     socket.on("rooms_list", setActiveRooms);
 
     // NEW EVENTS
     socket.on("update_users", setUsers);
+    
     socket.on("receive_message", (msg) => {
         setMessages((prev) => [...prev, msg]);
+    });
+    
+    // Error Handler for invalid room
+    socket.on("error", (msg) => {
+        alert(msg);
+        setIsInRoom(false);
+        setRoom("");
     });
 
     return () => {
@@ -150,10 +178,10 @@ function App() {
       socket.off("rooms_list");
       socket.off("update_users");
       socket.off("receive_message");
+      socket.off("error");
     };
   }, [role]);
 
-  // ... (Keep Host Sync Broadcaster, Room Actions, Player Controls, Progress Logic as is) ...
   // --- HOST SYNC BROADCASTER ---
   useEffect(() => {
     let interval = null;
@@ -175,15 +203,6 @@ function App() {
   const [username, setUsername] = useState("");
   const [otp, setOtp] = useState(["", "", "", ""]);
   const inputRefs = [useRef(), useRef(), useRef(), useRef()];
-
-  const animals = ["Panda", "Giraffe", "Lion", "Tiger", "Koala", "Penguin", "Eagle", "Falcon", "Otter", "Fox"];
-  const adjectives = ["Cool", "Happy", "Swift", "Brave", "Calm", "Fierce", "Lucky", "Wise", "Epic", "Neon"];
-
-  const generateName = () => {
-      const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const animal = animals[Math.floor(Math.random() * animals.length)];
-      return `${adj} ${animal}`;
-  };
 
   useEffect(() => {
      const savedName = localStorage.getItem("music_share_name");
@@ -207,12 +226,9 @@ function App() {
       newOtp[index] = value;
       setOtp(newOtp);
 
-      // Auto-focus next
       if (value !== "" && index < 3) {
           inputRefs[index + 1].current.focus();
       }
-      
-      // Auto-submit if full? Optional.
   };
 
   const handleOtpKeyDown = (index, e) => {
@@ -229,45 +245,43 @@ function App() {
   const createRoom = () => {
       const newRoomId = generateRoomId();
       setRoom(newRoomId);
-      socket.emit("join_room", { roomId: newRoomId, username });
-      setIsInRoom(true);
+      socket.emit("join_room", { roomId: newRoomId, username, create: true });
   };
 
   const joinWithOtp = () => {
       const enteredRoom = otp.join("");
       if (enteredRoom.length === 4) {
           setRoom(enteredRoom);
-          socket.emit("join_room", { roomId: enteredRoom, username });
-          setIsInRoom(true);
+          socket.emit("join_room", { roomId: enteredRoom, username, create: false });
       } else {
           alert("Please enter a 4-digit Room ID");
       }
   };
 
-  // Override old joinRoom for Active Room Clicks
   const joinExistingRoom = (rId) => {
       setRoom(rId);
-      socket.emit("join_room", { roomId: rId, username });
-      setIsInRoom(true);
+      socket.emit("join_room", { roomId: rId, username, create: false });
   };
-
-  const joinRoom = () => { /* Deprecated by new UI, keep for safety or remove */ };
-
-  // --- MISSING FUNCTIONS RESTORED ---
+  
   const leaveRoom = () => {
     socket.emit("leave_room");
     setIsInRoom(false);
     setVideoId(""); setRole(""); setIsPlaying(false); setRoom(""); setQueue([]); setMessages([]); setUsers([]);
-    // Reload active rooms
   };
 
-  const performSearch = () => { if (searchQuery) socket.emit("search_song", searchQuery); };
+  const performSearch = () => { 
+      if (searchQuery) {
+          setIsSearching(true);
+          setSearchResults([]); // Clear previous results immediately
+          socket.emit("search_song", searchQuery); 
+      }
+  };
   
+  // ... (keep selectSong, addToQueue, playNext, player logic) ...
   const selectSong = (song) => {
     socket.emit("play_song", { room, videoId: song.videoId, title: song.title });
     setSearchResults([]); setSearchQuery("");
   };
-  
   const addToQueue = (song) => {
     if (!song && !searchQuery) return;
     const id = song ? song.videoId : searchQuery;
@@ -275,7 +289,6 @@ function App() {
     socket.emit("add_to_queue", { room, videoId: id, title: title });
     setSearchResults([]); setSearchQuery("");
   };
-  
   const playNext = () => { if (queue.length > 0) socket.emit("play_next", { room }); };
 
   // Ref for immediate state access in callbacks
@@ -298,7 +311,6 @@ function App() {
     if (isPlayingRef.current) {
       event.target.playVideo();
     } else {
-      // Important: prevent auto-play if room is paused
       event.target.pauseVideo();
     }
     
@@ -307,17 +319,18 @@ function App() {
        const { videoTime, sendingTimestamp } = latestSyncPacket.current;
        const now = Date.now() + clockOffsetRef.current;
        
-       // Calculate expected time
        let expectedTime = videoTime;
        if (isPlayingRef.current) {
           expectedTime = videoTime + ((now - sendingTimestamp) / 1000);
        }
-       
-       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlayingRef.current})`);
        event.target.seekTo(expectedTime, true);
     }
   };
+  
+  // --- MOBILE UI STATE ---
+  const [activeTab, setActiveTab] = useState("main"); // "sidebar", "main", "chat"
 
+  // Progress Bar Logic
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -355,13 +368,14 @@ function App() {
     setProgress(pct * 100); setCurrentTime(newTime);
     playerRef.current?.seekTo(newTime, true);
   };
-
+  
   // --- CHAT LOGIC ---
   const sendMessage = () => {
       if (chatMessage !== "") {
           const msgData = {
               room,
-              author: "You", // Better if we had proper names, but 'You' works for sender
+              author: username, // Use actual username
+              senderId: socket.id, // Send ID for identification
               message: chatMessage,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
@@ -369,9 +383,6 @@ function App() {
           setChatMessage("");
       }
   };
-
-  // --- MOBILE UI STATE ---
-  const [activeTab, setActiveTab] = useState("main"); // "sidebar", "main", "chat"
 
   return (
     <div className="App">
@@ -479,6 +490,10 @@ function App() {
                            onChange={(e) => setSearchQuery(e.target.value)} 
                            onKeyDown={(e) => e.key === 'Enter' && performSearch()}
                          />
+                         {isSearching && <div className="spinner-small"></div>}
+                         {(searchResults.length > 0 || searchQuery.length > 0) && (
+                             <button className="close-search-btn" onClick={() => { setSearchResults([]); setSearchQuery(""); }}>✕</button>
+                         )}
                       </div>
                       <div className="search-results-floating">
                         {searchResults.map((song) => (
@@ -516,14 +531,17 @@ function App() {
             <div className="chat-panel">
                 <div className="chat-header">Chat</div>
                 <div className="chat-messages">
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`chat-bubble ${msg.author === "You" ? "mine" : ""}`}>
-                            <div className="chat-meta">
-                                {msg.author} <span className="chat-time">{msg.time}</span>
+                    {messages.map((msg, i) => {
+                        const isMine = msg.senderId === socket.id || msg.author === "You"; // Fallback for legacy
+                        return (
+                            <div key={i} className={`chat-bubble ${isMine ? "mine" : ""}`}>
+                                <div className="chat-meta">
+                                    {isMine ? "You" : msg.author} <span className="chat-time">{msg.time}</span>
+                                </div>
+                                <div className="chat-text">{msg.message}</div>
                             </div>
-                            <div className="chat-text">{msg.message}</div>
-                        </div>
-                    ))}
+                        );
+                    })}
                     <div ref={chatEndRef}></div>
                 </div>
                 <div className="chat-input-area">
