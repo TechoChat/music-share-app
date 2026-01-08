@@ -57,7 +57,20 @@ const generateName = () => {
 
 // ... existing code ...
 
-    socket.on("join_room", (roomId) => {
+    // Updated join_room to accept Object { roomId, username }
+    socket.on("join_room", (data) => {
+    let roomId = "";
+    let username = "";
+    
+    // Support both old (string) and new (object) formats for backward compatibility during dev
+    if (typeof data === "string") {
+       roomId = data;
+       username = generateName(); // Fallback
+    } else {
+       roomId = data.roomId;
+       username = data.username || generateName();
+    }
+
     // 1. ZOMBIE ROOM CLEANUP
     if (rooms[roomId]) {
       const roomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
@@ -70,9 +83,9 @@ const generateName = () => {
 
     socket.join(roomId);
     socket.currentRoom = roomId;
-    
-    // Generate User Name
-    socket.username = generateName();
+    socket.username = username; // Use provided Name
+
+    console.log(`User ${socket.id} (${username}) joining ${roomId}`);
 
     // 2. CHECK IF ROOM EXISTS
     if (!rooms[roomId]) {
@@ -80,7 +93,6 @@ const generateName = () => {
       rooms[roomId] = { 
         host: socket.id, 
         currentVideo: null, 
-        currentTitle: null,
         currentTitle: null,
         isPlaying: false,
         lastKnownTime: 0,
@@ -106,7 +118,6 @@ const generateName = () => {
       }
 
       // Sync playback state
-      // NEW: Send consolidated state to new joiner
       socket.emit("initial_sync", {
         videoId: rooms[roomId].currentVideo,
         isPlaying: rooms[roomId].isPlaying,
@@ -117,10 +128,12 @@ const generateName = () => {
     }
     
     // ADD USER TO LIST
+    // Remove if exists to avoid dupes
+    rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
     rooms[roomId].users.push({ id: socket.id, name: socket.username });
-    io.to(roomId).emit("update_users", rooms[roomId].users); // Broadcast new list
-
-    broadcastRooms(); // Update user/count
+    
+    io.to(roomId).emit("update_users", rooms[roomId].users); // Broadcast new list inside room
+    broadcastRooms(); // Update home screen counts immediately
   });
 
   // --- PLAYBACK HANDLERS ---

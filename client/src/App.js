@@ -171,145 +171,138 @@ function App() {
     return () => { if (interval) clearInterval(interval); };
   }, [role, isPlaying, room]);
 
-  const joinRoom = () => { if (room !== "") { socket.emit("join_room", room); setIsInRoom(true); } };
-  const leaveRoom = () => {
-    socket.emit("leave_room");
-    setIsInRoom(false);
-    setVideoId(""); setRole(""); setIsPlaying(false); setRoom(""); setQueue([]); setMessages([]); setUsers([]);
+  // --- NAME & ROOM LOGIC ---
+  const [username, setUsername] = useState("");
+  const [otp, setOtp] = useState(["", "", "", ""]);
+  const inputRefs = [useRef(), useRef(), useRef(), useRef()];
+
+  const animals = ["Panda", "Giraffe", "Lion", "Tiger", "Koala", "Penguin", "Eagle", "Falcon", "Otter", "Fox"];
+  const adjectives = ["Cool", "Happy", "Swift", "Brave", "Calm", "Fierce", "Lucky", "Wise", "Epic", "Neon"];
+
+  const generateName = () => {
+      const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const animal = animals[Math.floor(Math.random() * animals.length)];
+      return `${adj} ${animal}`;
   };
 
   useEffect(() => {
-    const handleTabClose = () => { socket.emit("leave_room"); };
-    window.addEventListener('beforeunload', handleTabClose);
-    return () => { window.removeEventListener('beforeunload', handleTabClose); };
+     const savedName = localStorage.getItem("music_share_name");
+     if (savedName) setUsername(savedName);
+     else {
+         const newName = generateName();
+         setUsername(newName);
+         localStorage.setItem("music_share_name", newName);
+     }
   }, []);
 
-  const performSearch = () => { if (searchQuery) socket.emit("search_song", searchQuery); };
-  const selectSong = (song) => {
-    socket.emit("play_song", { room, videoId: song.videoId, title: song.title });
-    setSearchResults([]); setSearchQuery("");
-  };
-  const addToQueue = (song) => {
-    if (!song && !searchQuery) return;
-    const id = song ? song.videoId : searchQuery;
-    const title = song ? song.title : searchQuery; 
-    socket.emit("add_to_queue", { room, videoId: id, title: title });
-    setSearchResults([]); setSearchQuery("");
-  };
-  const playNext = () => { if (queue.length > 0) socket.emit("play_next", { room }); };
-
-  // Ref for immediate state access in callbacks
-  const isPlayingRef = useRef(isPlaying);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-
-  const handlePlayerStateChange = (event) => {
-    if (role === "host") {
-      const ps = event.data;
-      if (ps === 1) { socket.emit("player_action", { room, action: "play" }); setIsPlaying(true); }
-      if (ps === 2) { socket.emit("player_action", { room, action: "pause" }); setIsPlaying(false); }
-      if (ps === 0) playNext();
-    }
+  const regenerateName = () => {
+      const newName = generateName();
+      setUsername(newName);
+      localStorage.setItem("music_share_name", newName);
   };
 
-  const onPlayerReady = (event) => {
-    playerRef.current = event.target;
-    
-    // Auto-play / Pause logic based on room state (Use REF for fresh value)
-    if (isPlayingRef.current) {
-      event.target.playVideo();
-    } else {
-      // Important: prevent auto-play if room is paused
-      event.target.pauseVideo();
-    }
-    
-    // SYNC for Late Joiners
-    if (latestSyncPacket.current && role !== "host") {
-       const { videoTime, sendingTimestamp } = latestSyncPacket.current;
-       const now = Date.now() + clockOffsetRef.current;
-       
-       // Calculate expected time
-       let expectedTime = videoTime;
-       if (isPlayingRef.current) {
-          expectedTime = videoTime + ((now - sendingTimestamp) / 1000);
-       }
-       
-       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlayingRef.current})`);
-       event.target.seekTo(expectedTime, true);
-    }
+  const handleOtpChange = (index, value) => {
+      if (isNaN(value)) return;
+      const newOtp = [...otp];
+      newOtp[index] = value;
+      setOtp(newOtp);
+
+      // Auto-focus next
+      if (value !== "" && index < 3) {
+          inputRefs[index + 1].current.focus();
+      }
+      
+      // Auto-submit if full? Optional.
   };
 
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    let progressInterval;
-    if (isPlaying && playerRef.current) {
-      progressInterval = setInterval(() => {
-        try {
-           const curr = playerRef.current.getCurrentTime();
-           const dur = playerRef.current.getDuration();
-           if (dur > 0) { setCurrentTime(curr); setDuration(dur); setProgress((curr / dur) * 100); }
-        } catch (e) { }
-      }, 500);
-    } else clearInterval(progressInterval);
-    return () => clearInterval(progressInterval);
-  }, [isPlaying]);
-
-  const formatTime = (seconds) => {
-    if (!seconds) return "0:00";
-    const min = Math.floor(seconds / 60);
-    const sec = Math.floor(seconds % 60);
-    return `${min}:${sec < 10 ? "0" + sec : sec}`;
+  const handleOtpKeyDown = (index, e) => {
+      if (e.key === "Backspace" && otp[index] === "" && index > 0) {
+          inputRefs[index - 1].current.focus();
+      }
+      if (e.key === 'Enter') joinWithOtp();
   };
 
-  const opts = { height: "0", width: "0", playerVars: { autoplay: 0, controls: 0 } };
-  const togglePlay = () => { playerRef.current?.playVideo(); };
-  const togglePause = () => { playerRef.current?.pauseVideo(); };
-
-  const handleSeek = (e) => {
-    if (role !== "host") return;
-    const bar = e.target.getBoundingClientRect();
-    const pct = (e.clientX - bar.left) / bar.width;
-    const newTime = duration * pct;
-    setProgress(pct * 100); setCurrentTime(newTime);
-    playerRef.current?.seekTo(newTime, true);
+  const generateRoomId = () => {
+      return Math.floor(1000 + Math.random() * 9000).toString();
   };
 
-  // --- CHAT LOGIC ---
-  const sendMessage = () => {
-      if (chatMessage !== "") {
-          const msgData = {
-              room,
-              author: "You", // Better if we had proper names, but 'You' works for sender
-              message: chatMessage,
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          };
-          socket.emit("send_message", msgData);
-          setChatMessage("");
+  const createRoom = () => {
+      const newRoomId = generateRoomId();
+      setRoom(newRoomId);
+      socket.emit("join_room", { roomId: newRoomId, username });
+      setIsInRoom(true);
+  };
+
+  const joinWithOtp = () => {
+      const enteredRoom = otp.join("");
+      if (enteredRoom.length === 4) {
+          setRoom(enteredRoom);
+          socket.emit("join_room", { roomId: enteredRoom, username });
+          setIsInRoom(true);
+      } else {
+          alert("Please enter a 4-digit Room ID");
       }
   };
 
-  // --- MOBILE UI STATE ---
-  const [activeTab, setActiveTab] = useState("main"); // "sidebar", "main", "chat"
+  // Override old joinRoom for Active Room Clicks
+  const joinExistingRoom = (rId) => {
+      setRoom(rId);
+      socket.emit("join_room", { roomId: rId, username });
+      setIsInRoom(true);
+  };
+
+  const joinRoom = () => { /* Deprecated by new UI, keep for safety or remove */ };
 
   return (
     <div className="App">
       {!isInRoom ? (
-        // ... (Join Screen remains)
         <div className="joinChatContainer glass-panel">
           <h3>🎵 Music Share</h3>
-          <input type="text" placeholder="Enter Room ID..." onChange={(e) => setRoom(e.target.value)} />
-          <button onClick={joinRoom}>Join Room</button>
+          
+          {/* NAME GENERATOR */}
+          <div className="name-section">
+              <span className="hello-text">Hello,</span>
+              <div className="name-display">
+                  <span className="user-name-text">{username}</span>
+                  <button className="regen-btn" onClick={regenerateName} title="New Name">🔄</button>
+              </div>
+          </div>
+
+          {/* CREATE ROOM */}
+          <button className="create-room-btn" onClick={createRoom}>
+              ✨ Create New Room
+          </button>
+
+          <div className="divider"><span>OR JOIN</span></div>
+
+          {/* OTP INPUTS */}
+          <div className="otp-container">
+              {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={inputRefs[i]}
+                    type="text"
+                    maxLength="1"
+                    className="otp-input"
+                    value={digit}
+                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  />
+              ))}
+          </div>
+
+          <button className="join-btn" onClick={joinWithOtp}>
+              Join Room
+          </button>
           
           {activeRooms.length > 0 && (
             <div className="active-rooms-container">
               <h4>Active Rooms</h4>
               <div className="active-rooms-grid">
                  {activeRooms.map((r) => (
-                   <div key={r.roomId} className="room-card" onClick={() => { setRoom(r.roomId); joinRoom(); }}>
+                   <div key={r.roomId} className="room-card" onClick={() => joinExistingRoom(r.roomId)}>
                       <div className="room-card-header">
-                        <span className="room-id">Room: {r.roomId}</span>
+                        <span className="room-id">#{r.roomId}</span>
                         <span className="user-count">👥 {r.userCount}</span>
                       </div>
                       <div className="room-now-playing">{r.isPlaying ? "🎵 " + r.currentTitle : "Paused"}</div>

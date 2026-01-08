@@ -50,55 +50,83 @@ body {
   text-align: center;
 }
 
+/* --- NEW JOIN SCREEN STYLES --- */
 .joinChatContainer h3 {
-  font-size: 3rem;
-  margin-bottom: 40px;
+  font-size: 2.5rem;
+  margin-bottom: 30px;
   background: linear-gradient(90deg, #1ed760, #ffffff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 800;
-  letter-spacing: -1.5px;
+  letter-spacing: -1px;
 }
 
-.joinChatContainer input {
-  width: 100%;
-  max-width: 350px;
-  padding: 15px 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 50px;
-  color: white;
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-  outline: none;
+.name-section {
+  margin-bottom: 30px;
   text-align: center;
-  transition: all 0.2s;
 }
 
-.joinChatContainer input:focus {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: var(--primary);
-  box-shadow: 0 0 20px rgba(30, 215, 96, 0.2);
+.hello-text { color: #888; font-size: 1rem; }
+.name-display { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.user-name-text { font-size: 1.5rem; font-weight: 700; color: #fff; }
+.regen-btn {
+  background: none; border: none; font-size: 1.2rem; cursor: pointer; transition: 0.3s;
+  color: #555; padding: 5px;
 }
+.regen-btn:hover { color: var(--primary); transform: rotate(180deg); }
 
-.joinChatContainer button {
-  padding: 15px 60px;
+.create-room-btn {
+  padding: 14px 40px;
   border-radius: 50px;
   border: none;
-  background: var(--primary);
+  background: linear-gradient(135deg, #1db954, #1aa34a);
   color: #000;
   font-weight: 700;
   font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+  width: 100%;
+  max-width: 300px;
+}
+.create-room-btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(29, 185, 84, 0.5); }
+
+.divider { margin: 25px 0; color: #444; font-size: 0.8rem; font-weight: 600; width: 100%; max-width: 300px; display: flex; align-items: center; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #333; }
+.divider span { padding: 0 10px; }
+
+.otp-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  justify-content: center;
 }
 
-.joinChatContainer button:hover {
-  transform: scale(1.05);
-  background: var(--primary-dark);
+.otp-input {
+  width: 50px; height: 60px;
+  font-size: 1.5rem;
+  text-align: center;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: white;
+  font-weight: 700;
+  outline: none;
+  transition: 0.2s;
 }
+.otp-input:focus { border-color: var(--primary); background: rgba(255,255,255,0.12); transform: translateY(-2px); }
+
+.join-btn {
+  padding: 12px 40px;
+  border-radius: 50px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.join-btn:hover { background: #fff; color: #000; border-color: #fff; }
 
 .active-rooms-container {
   margin-top: 50px;
@@ -478,7 +506,7 @@ body {
     padding: 0 15px;
     background: rgba(24,24,24,0.98);
     border-top: 1px solid #333;
-    z-index: 1900;
+    /* z-index: 1900; */
   }
   
   .pb-info h4 { max-width: 150px; }
