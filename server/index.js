@@ -99,7 +99,10 @@ io.on("connection", (socket) => {
   socket.on("time_update", (data) => {
     if (rooms[data.room]) {
       // Broadcast host's timestamp to everyone else
-      socket.to(data.room).emit("receive_time", data.time);
+      socket.to(data.room).emit("receive_time", {
+        videoTime: data.videoTime,
+        sendingTimestamp: data.sendingTimestamp
+      });
     }
   });
 
