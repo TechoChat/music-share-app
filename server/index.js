@@ -259,9 +259,17 @@ const generateName = () => {
          rooms[roomId].host = newHostId;
          io.to(newHostId).emit("user_role", "host");
          console.log(`👑 New Host assigned: ${newHostId}`);
-         delete rooms[roomId];
-         console.log(`🗑️ Room ${roomId} deleted (Empty).`);
+       } else {
+          delete rooms[roomId];
+          console.log(`🗑️ Room ${roomId} deleted (Empty).`);
        }
+    } else {
+        // Even if not host, check if room is empty
+        const remainingUsers = io.sockets.adapter.rooms.get(roomId);
+        if (!remainingUsers || remainingUsers.size === 0) {
+             delete rooms[roomId];
+             console.log(`🗑️ Room ${roomId} deleted (Empty).`);
+        }
     }
     
     // Broadcast updates to home screen (count change or room deletion)

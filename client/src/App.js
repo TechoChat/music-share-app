@@ -94,11 +94,8 @@ function App() {
       if (playerRef.current) {
          const player = playerRef.current.internalPlayer || playerRef.current;
          if (player && player.loadVideoById) {
-             player.loadVideoById(id);
-             // Short timeout to ensure load finishes before play command
-             setTimeout(() => {
-                 if (player.playVideo) player.playVideo();
-             }, 300);
+             // Object syntax automatically plays by default
+             player.loadVideoById({videoId: id});
          }
       }
     });
@@ -296,6 +293,11 @@ function App() {
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   const handlePlayerStateChange = (event) => {
+    // Force play if stuck in CUED state and we should be playing
+    if (event.data === 5 && isPlayingRef.current) {
+        event.target.playVideo();
+    }
+
     if (role === "host") {
       const ps = event.data;
       if (ps === 1) { socket.emit("player_action", { room, action: "play" }); setIsPlaying(true); }
