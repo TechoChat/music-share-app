@@ -358,7 +358,8 @@ function App() {
     return `${min}:${sec < 10 ? "0" + sec : sec}`;
   };
 
-  const opts = { height: "0", width: "0", playerVars: { autoplay: 0, controls: 0 } };
+  // Ensure playsinline is active for iOS
+  const opts = { height: "0", width: "0", playerVars: { autoplay: 0, controls: 0, playsinline: 1 } };
   const togglePlay = () => { playerRef.current?.playVideo(); };
   const togglePause = () => { playerRef.current?.pauseVideo(); };
 
@@ -590,7 +591,7 @@ function App() {
                 </div>
             </div>
 
-            <div className="hidden-player" style={{display:'none'}}>
+            <div className="hidden-player" style={{position:'absolute', top:'-9999px', opacity: 0, pointerEvents: 'none'}}>
                 <YouTube videoId={videoId} opts={opts} onReady={onPlayerReady} onStateChange={handlePlayerStateChange} />
             </div>
         </div>
