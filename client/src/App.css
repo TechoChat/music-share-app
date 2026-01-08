@@ -452,7 +452,6 @@
   background: #333;
   color: white;
 }
-}
 
 .leave-btn:hover {
   background: var(--danger);
