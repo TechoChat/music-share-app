@@ -94,8 +94,13 @@ const rooms = {};
       if (rooms[roomId].queue) {
         socket.emit("update_queue", rooms[roomId].queue);
       }
+      
+      // CRITICAL FLIX: Explicitly handle both Play AND Pause for new joiners
+      // 'receive_song' triggers auto-play on client, so if we are paused, we MUST say so.
       if (rooms[roomId].isPlaying) {
          socket.emit("receive_action", "play");
+      } else {
+         socket.emit("receive_action", "pause");
       }
     }
     broadcastRooms(); // Update user/count

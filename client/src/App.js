@@ -433,9 +433,10 @@ function App() {
               </div>
 
               {role === "host" ? (
-                <div className="controls-row">
-                   <button className="control-btn" onClick={togglePause}>⏸</button>
-                   <button className="control-btn main-play" onClick={togglePlay}>▶</button>
+              <div className="controls-row">
+                   <button className="control-btn main-play" onClick={() => isPlaying ? togglePause() : togglePlay()}>
+                     {isPlaying ? "⏸" : "▶"}
+                   </button>
                    <button className="control-btn" onClick={playNext}>⏭</button>
                 </div>
               ) : (

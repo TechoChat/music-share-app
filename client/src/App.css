@@ -563,12 +563,26 @@
 
 /* --- RESPONSIVE --- */
 /* --- RESPONSIVE & MOBILE OPTIMIZATIONS --- */
+/* --- RESPONSIVE & MOBILE OPTIMIZATIONS --- */
 @media (max-width: 900px) {
+  /* GLOBAL FULL SCREEN FOR MOBILE */
+  .App {
+    padding: 0;
+    align-items: flex-start; /* Allow full height expansion */
+    background: #000; /* Ensure no white gaps */
+  }
+
+  /* Make Room Container Full Screen, No Borders */
   .roomContainer {
-    height: auto;
-    min-height: 100vh;
+    width: 100vw;
+    height: 100vh; /* Full viewport height */
+    height: 100dvh; /* Dynamic viewport height for modern browsers */
+    max-width: none;
+    border-radius: 0;
+    border: none;
     padding: 1rem;
-    overflow-y: auto; /* Allow scrolling on mobile */
+    overflow-y: auto; /* Essential for scrolling */
+    box-shadow: none;
   }
   
   .header {
@@ -585,11 +599,12 @@
   .main-grid {
     grid-template-columns: 1fr;
     gap: 2rem;
-    overflow: visible; /* Let it flow */
+    overflow: visible;
+    padding-bottom: 50px; /* Space for bottom scroll */
   }
   
   .queue-section {
-    max-height: none; /* Let queue expand on mobile */
+    max-height: none; 
     margin-bottom: 50px;
   }
 
@@ -614,12 +629,12 @@
   }
 
   .search-dropdown {
-    position: fixed; /* Fix to screen on mobile */
+    position: fixed; 
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 90%;
-    max-height: 80vh;
+    max-height: 70vh;
     box-shadow: 0 0 100px rgba(0,0,0,0.9);
     border: 1px solid var(--primary);
   }
