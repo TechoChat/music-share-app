@@ -13,6 +13,7 @@ function App() {
   const [videoId, setVideoId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]); // Array of search results
+  const [activeRooms, setActiveRooms] = useState([]); // Array of active rooms from server
   const [queue, setQueue] = useState([]);
   
   // SYNC STATE
@@ -159,6 +160,11 @@ function App() {
       setSearchResults(results);
     });
 
+    // NEW: ACTIVE ROOMS LISTENER
+    socket.on("rooms_list", (rooms) => {
+      setActiveRooms(rooms);
+    });
+
     return () => {
       socket.off("user_role");
       socket.off("receive_song");
@@ -166,6 +172,7 @@ function App() {
       socket.off("update_queue");
       socket.off("receive_time");
       socket.off("search_results");
+      socket.off("rooms_list");
     };
   }, [role]); // Re-bind if role changes
 
@@ -236,9 +243,14 @@ function App() {
   };
 
   const addToQueue = (song) => {
-    if (!song) return; // Modified to accept song object or current search
+    if (!song && !searchQuery) return; // Need song object OR simple query
+    
+    // If song object exists (from search), use it.
+    // If manual text input, title = videoId
     const id = song ? song.videoId : searchQuery;
-    socket.emit("add_to_queue", { room, videoId: id });
+    const title = song ? song.title : searchQuery; 
+
+    socket.emit("add_to_queue", { room, videoId: id, title: title });
     setSearchResults([]);
     setSearchQuery("");
   };
@@ -364,6 +376,26 @@ function App() {
           <h3>🎵 Music Share</h3>
           <input type="text" placeholder="Enter Room ID..." onChange={(e) => setRoom(e.target.value)} />
           <button onClick={joinRoom}>Join Room</button>
+
+          {/* ACTIVE ROOMS LIST */}
+          {activeRooms.length > 0 && (
+            <div className="active-rooms-container">
+              <h4 style={{marginTop: '20px', marginBottom: '10px', color: '#ccc'}}>Active Rooms</h4>
+              <div className="active-rooms-grid">
+                 {activeRooms.map((r) => (
+                   <div key={r.roomId} className="room-card" onClick={() => { setRoom(r.roomId); joinRoom(); }}>
+                      <div className="room-card-header">
+                        <span className="room-id">Room: {r.roomId}</span>
+                        <span className="user-count">👥 {r.userCount}</span>
+                      </div>
+                      <div className="room-now-playing">
+                        {r.isPlaying ? "🎵 " + r.currentTitle : "Paused"}
+                      </div>
+                   </div>
+                 ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="roomContainer glass-panel">
@@ -455,10 +487,11 @@ function App() {
                  {queue.length === 0 ? (
                    <li className="empty-queue" style={{color: '#888', fontStyle: 'italic'}}>Queue is empty</li>
                  ) : (
-                   queue.map((songId, index) => (
-                     <li key={index} className="queue-item">
-                       <span className="queue-index">{index + 1}.</span>
-                       <span>{songId}</span>
+                   queue.map((song, index) => (
+                     <li key={index}>
+                       <span className="queue-number">#{index + 1}</span>
+                       {/* Handle both new object structure and old string structure for legacy support */}
+                       {typeof song === 'object' ? song.title : song} 
                      </li>
                    ))
                  )}

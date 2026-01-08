@@ -21,8 +21,30 @@ const io = new Server(server, {
 // Memory storage
 const rooms = {};
 
-io.on("connection", (socket) => {
-  console.log(`User Connected: ${socket.id}`);
+  // Broadcast active rooms to everyone
+  const broadcastRooms = () => {
+    const activeRooms = [];
+    for (const roomId in rooms) {
+      const room = rooms[roomId];
+      const userCount = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+      if (userCount > 0) {
+        activeRooms.push({
+          roomId,
+          currentVideo: room.currentVideo,
+          currentTitle: room.currentTitle || "Nothing Playing",
+          userCount,
+          isPlaying: room.isPlaying
+        });
+      }
+    }
+    io.emit("rooms_list", activeRooms);
+  };
+
+  io.on("connection", (socket) => {
+    console.log(`User Connected: ${socket.id}`);
+    
+    // Send initial list
+    broadcastRooms();
 
   socket.on("join_room", (roomId) => {
     // 1. ZOMBIE ROOM CLEANUP
@@ -31,6 +53,7 @@ io.on("connection", (socket) => {
       if (roomSize === 0) {
         console.log(`⚠️ Cleaning up empty room: ${roomId}`);
         delete rooms[roomId];
+        broadcastRooms(); // Update list
       }
     }
 
@@ -43,11 +66,13 @@ io.on("connection", (socket) => {
       rooms[roomId] = { 
         host: socket.id, 
         currentVideo: null, 
+        currentTitle: null,
         isPlaying: false,
         queue: [] // Queue Array
       };
       socket.emit("user_role", "host");
       console.log(`✅ Room ${roomId} created. Host: ${socket.id}`);
+      broadcastRooms(); // Update list
     } else {
       // Room exists... BUT IS THE HOST ALIVE?
       const currentHostId = rooms[roomId].host;
@@ -73,6 +98,7 @@ io.on("connection", (socket) => {
          socket.emit("receive_action", "play");
       }
     }
+    broadcastRooms(); // Update user/count
   });
 
   // --- PLAYBACK HANDLERS ---
@@ -80,12 +106,14 @@ io.on("connection", (socket) => {
   socket.on("play_song", (data) => {
     if (rooms[data.room]) {
       rooms[data.room].currentVideo = data.videoId;
+      rooms[data.room].currentTitle = data.title || data.videoId; // Store title
       rooms[data.room].isPlaying = true;
       
       // Send Song ID
       io.to(data.room).emit("receive_song", data.videoId);
       // Force Play Action
       io.to(data.room).emit("receive_action", "play");
+      broadcastRooms(); // Update song info
     }
   });
 
@@ -109,9 +137,12 @@ io.on("connection", (socket) => {
 
   // --- QUEUE HANDLERS ---
 
+
+
   socket.on("add_to_queue", (data) => {
     if (rooms[data.room]) {
-      rooms[data.room].queue.push(data.videoId);
+      // Store object { videoId, title }
+      rooms[data.room].queue.push({ videoId: data.videoId, title: data.title || data.videoId });
       io.to(data.room).emit("update_queue", rooms[data.room].queue);
     }
   });
@@ -119,17 +150,17 @@ io.on("connection", (socket) => {
   socket.on("play_next", (data) => {
     const room = rooms[data.room];
     if (room && room.queue.length > 0) {
-      const nextSong = room.queue.shift(); // Remove first song
-      room.currentVideo = nextSong;
+      const nextSong = room.queue.shift(); // This is now an object
+      room.currentVideo = nextSong.videoId;
+      room.currentTitle = nextSong.title; // Update title
       room.isPlaying = true;
       
-      io.to(data.room).emit("receive_song", nextSong);
+      io.to(data.room).emit("receive_song", nextSong.videoId); // Still just emit ID to players
       io.to(data.room).emit("update_queue", room.queue);
       io.to(data.room).emit("receive_action", "play");
+      broadcastRooms(); // Update song info
     }
   });
-
-  // --- SEARCH HANDLER ---
   socket.on("search_song", async (query) => {
     try {
       const r = await ytSearch(query);
