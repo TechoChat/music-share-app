@@ -407,7 +407,9 @@ function App() {
                 <div className="chat-messages">
                     {messages.map((msg, i) => (
                         <div key={i} className={`chat-bubble ${msg.author === "You" ? "mine" : ""}`}>
-                            <div className="chat-meta">{msg.author !== "You" && msg.author} <span className="chat-time">{msg.time}</span></div>
+                            <div className="chat-meta">
+                                {msg.author} <span className="chat-time">{msg.time}</span>
+                            </div>
                             <div className="chat-text">{msg.message}</div>
                         </div>
                     ))}
