@@ -458,116 +458,197 @@
   color: white;
 }
 
-/* --- ACTIVE ROOMS --- */
+/* --- POLISHED ACTIVE ROOMS HEADER --- */
+.active-rooms-container h4 {
+  margin-top: 20px;
+  margin-bottom: 15px;
+  color: #ccc;
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255,255,255,0.05); /* Optional: subtle separator */
+  padding-bottom: 5px;
+  display: inline-block;
+}
+
+/* --- POLISHED ACTIVE ROOMS --- */
 .active-rooms-container {
   width: 100%;
   border-top: 1px solid rgba(255,255,255,0.1);
-  margin-top: 20px;
-  padding-top: 10px;
+  margin-top: 25px;
+  padding-top: 15px;
+  text-align: left;
 }
 
 .active-rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Slightly wider cards */
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 15px;
-  max-height: 300px; /* More space */
+  max-height: 250px;
   overflow-y: auto;
-  padding: 5px; /* Prevent shadow cutout */
+  padding-right: 5px; /* Space for scrollbar */
+}
+
+/* Custom Scrollbar for room grid */
+.active-rooms-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.active-rooms-grid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
 }
 
 .room-card {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px;
   cursor: pointer;
-  transition: 0.2s;
-  text-align: left;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.room-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--primary), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
 .room-card:hover {
-  background: rgba(255,255,255,0.1);
-  border-color: var(--primary);
-  transform: translateY(-2px);
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-4px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.room-card:hover::before {
+  opacity: 1;
 }
 
 .room-card-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8rem;
-  color: #aaa;
-  margin-bottom: 5px;
+  font-size: 0.85rem;
+  color: #ccc;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
-.room-id {
-  font-weight: bold;
-  color: white;
+.user-count {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.75rem;
 }
 
 .room-now-playing {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--primary);
+  font-weight: 600;
 }
+
 /* --- ANIMATIONS --- */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+
 /* --- RESPONSIVE --- */
+/* --- RESPONSIVE & MOBILE OPTIMIZATIONS --- */
 @media (max-width: 900px) {
   .roomContainer {
     height: auto;
     min-height: 100vh;
+    padding: 1rem;
+    overflow-y: auto; /* Allow scrolling on mobile */
   }
   
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .leave-btn {
+    width: 100%;
+    margin-top: 10px;
+  }
+
   .main-grid {
     grid-template-columns: 1fr;
+    gap: 2rem;
+    overflow: visible; /* Let it flow */
   }
   
   .queue-section {
-    max-height: none; /* Let it grow or handle scroll better */
-    height: auto;
+    max-height: none; /* Let queue expand on mobile */
+    margin-bottom: 50px;
   }
 
-  /* FULLSCREEN SEARCH ON MOBILE */
-  .search-wrapper {
-    position: static; /* Allow dropdown to escape relative container */
+  /* Player Section Adjustments */
+  .album-art-container {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .album-art {
+    font-size: 3rem;
+  }
+
+  /* Search Adjustments */
+  .search-container {
+    flex-direction: column;
+  }
+  
+  .add-btn {
+    width: 100%;
+    padding: 12px;
   }
 
   .search-dropdown {
-    position: fixed;
-    top: 60px; /* Below header */
-    left: 10px;
-    right: 10px;
-    bottom: 20px;
-    height: auto;
-    max-height: 70vh;
-    z-index: 2000;
-    backdrop-filter: blur(20px);
-    background: rgba(10, 10, 10, 0.95);
+    position: fixed; /* Fix to screen on mobile */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-height: 80vh;
+    box-shadow: 0 0 100px rgba(0,0,0,0.9);
     border: 1px solid var(--primary);
-    box-shadow: 0 0 50px rgba(0,0,0,0.9);
+  }
+}
+
+@media (max-width: 450px) {
+  .joinChatContainer {
+    padding: 1.5rem;
+    width: 95%;
   }
 
-  .search-result-item {
-    padding: 15px; /* Larger touch target */
+  .joinChatContainer h3 {
+    font-size: 2rem;
   }
 
-  .search-result-item img {
-    width: 80px; /* Larger thumb */
+  .roomContainer {
+    padding: 0.8rem;
   }
 
-  .result-title {
-    font-size: 1.1rem; /* Larger text */
+  /* Compact Active Rooms for small phones */
+  .active-rooms-grid {
+    grid-template-columns: 1fr 1fr; /* 2 columns closely packed */
   }
   
-  .roomContainer .header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 10px;
+  .room-card {
+    padding: 8px;
+  }
+  
+  .room-card-header {
+    font-size: 0.7rem;
   }
 }

@@ -380,7 +380,7 @@ function App() {
           {/* ACTIVE ROOMS LIST */}
           {activeRooms.length > 0 && (
             <div className="active-rooms-container">
-              <h4 style={{marginTop: '20px', marginBottom: '10px', color: '#ccc'}}>Active Rooms</h4>
+              <h4>Active Rooms</h4>
               <div className="active-rooms-grid">
                  {activeRooms.map((r) => (
                    <div key={r.roomId} className="room-card" onClick={() => { setRoom(r.roomId); joinRoom(); }}>
