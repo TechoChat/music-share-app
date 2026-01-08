@@ -82,7 +82,8 @@ function App() {
     socket.on("user_role", setRole);
     socket.on("receive_song", (id) => {
       setVideoId(id);
-      setIsPlaying(true);
+      // Removed setIsPlaying(true) - wait for explicit play/pause action or sync
+      
       if (playerRef.current?.internalPlayer) playerRef.current.internalPlayer.loadVideoById(id);
       else if (playerRef.current?.loadVideoById) playerRef.current.loadVideoById(id);
     });
@@ -90,6 +91,20 @@ function App() {
     socket.on("receive_action", (action) => {
       if (action === "play") { setIsPlaying(true); playerRef.current?.playVideo(); }
       if (action === "pause") { setIsPlaying(false); playerRef.current?.pauseVideo(); }
+    });
+    
+    // NEW: INITIAL SYNC FOR JOINERS
+    socket.on("initial_sync", (data) => {
+       console.log("Initial Sync Data:", data);
+       if (data.videoId) setVideoId(data.videoId);
+       setIsPlaying(data.isPlaying); // Set correct state immediately
+       if (data.queue) setQueue(data.queue);
+       
+       // Store sync data for onPlayerReady
+       latestSyncPacket.current = { 
+         videoTime: data.videoTime, 
+         sendingTimestamp: data.sendingTimestamp 
+       };
     });
 
     socket.on("update_queue", setQueue);
@@ -128,6 +143,7 @@ function App() {
       socket.off("user_role");
       socket.off("receive_song");
       socket.off("receive_action");
+      socket.off("initial_sync");
       socket.off("update_queue");
       socket.off("receive_time");
       socket.off("search_results");
@@ -193,12 +209,34 @@ function App() {
 
   const onPlayerReady = (event) => {
     playerRef.current = event.target;
-    if (isPlaying) event.target.playVideo();
+    
+    // Auto-play / Pause logic based on room state
+    if (isPlaying) {
+      event.target.playVideo();
+    } else {
+      // Important: loadVideoById usually auto-plays, so we must force pause if state is stopped
+      event.target.pauseVideo();
+    }
+    
+    // SYNC for Late Joiners
     if (latestSyncPacket.current && role !== "host") {
        const { videoTime, sendingTimestamp } = latestSyncPacket.current;
        const now = Date.now() + clockOffsetRef.current;
-       const expected = videoTime + ((now - sendingTimestamp) / 1000);
-       event.target.seekTo(expected + 0.2, true);
+       
+       // Calculate expected time
+       // If Paused, sendingTimestamp might be old, so we might just use videoTime.
+       // But assuming host sends time_update only when playing, or sendingTimestamp is accurate.
+       
+       // If IS PLAYING: Calculate drift.
+       // If PAUSED: Just seek to videoTime.
+       
+       let expectedTime = videoTime;
+       if (isPlaying) {
+          expectedTime = videoTime + ((now - sendingTimestamp) / 1000);
+       }
+       
+       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlaying})`);
+       event.target.seekTo(expectedTime, true);
     }
   };
 

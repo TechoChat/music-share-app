@@ -81,7 +81,10 @@ const generateName = () => {
         host: socket.id, 
         currentVideo: null, 
         currentTitle: null,
+        currentTitle: null,
         isPlaying: false,
+        lastKnownTime: 0,
+        lastTimestamp: 0,
         queue: [],
         users: [] // Track users explicitly
       };
@@ -103,20 +106,14 @@ const generateName = () => {
       }
 
       // Sync playback state
-      if (rooms[roomId].currentVideo) {
-        socket.emit("receive_song", rooms[roomId].currentVideo);
-      }
-      if (rooms[roomId].queue) {
-        socket.emit("update_queue", rooms[roomId].queue);
-      }
-      
-      // CRITICAL FLIX: Explicitly handle both Play AND Pause for new joiners
-      // 'receive_song' triggers auto-play on client, so if we are paused, we MUST say so.
-      if (rooms[roomId].isPlaying) {
-         socket.emit("receive_action", "play");
-      } else {
-         socket.emit("receive_action", "pause");
-      }
+      // NEW: Send consolidated state to new joiner
+      socket.emit("initial_sync", {
+        videoId: rooms[roomId].currentVideo,
+        isPlaying: rooms[roomId].isPlaying,
+        videoTime: rooms[roomId].lastKnownTime || 0,
+        sendingTimestamp: rooms[roomId].lastTimestamp || Date.now(),
+        queue: rooms[roomId].queue
+      });
     }
     
     // ADD USER TO LIST
@@ -133,6 +130,8 @@ const generateName = () => {
       rooms[data.room].currentVideo = data.videoId;
       rooms[data.room].currentTitle = data.title || data.videoId; // Store title
       rooms[data.room].isPlaying = true;
+      rooms[data.room].lastKnownTime = 0; // Reset time on new song
+      rooms[data.room].lastTimestamp = Date.now();
       
       // Send Song ID
       io.to(data.room).emit("receive_song", data.videoId);
@@ -152,6 +151,10 @@ const generateName = () => {
   // --- SYNC HANDLER (NEW) ---
   socket.on("time_update", (data) => {
     if (rooms[data.room]) {
+      // Store on server for late joiners
+      rooms[data.room].lastKnownTime = data.videoTime;
+      rooms[data.room].lastTimestamp = data.sendingTimestamp;
+
       // Broadcast host's timestamp to everyone else
       socket.to(data.room).emit("receive_time", {
         videoTime: data.videoTime,

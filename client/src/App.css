@@ -553,11 +553,19 @@ body {
   
   .pb-left { width: auto; min-width: 0; flex: 1; }
   .pb-info h4 { max-width: 150px; }
-  .pb-center { display: none; } /* On super small mobile, maybe hide progress? Or simplifiy */
-  .pb-right { display: none; }
   
-  /* Mobile control override */
-  .pb-controls { display: flex; margin: 0; } /* Show in left? No, need better mobile player */
+  /* Mobile Player: Show Controls! */
+  .pb-center { 
+    display: flex; 
+    width: auto; 
+    margin-left: auto;
+  }
+  
+  .pb-progress-row { display: none; } /* Hide progress bar on mobile footer for space */
+  .pb-controls { margin: 0; gap: 10px; }
+  
+  .pb-btn { font-size: 1.5rem; } /* Larger touch targets */
+  .pb-right { display: none; }
 }
 
 /* Mobile Player Tweaks */
