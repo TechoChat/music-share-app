@@ -15,8 +15,11 @@ function App() {
   const [queue, setQueue] = useState([]);
   
   // SYNC STATE
-  const [clockOffset, setClockOffset] = useState(0); // MyTime + Offset = ServerTime
-  const [syncStatus, setSyncStatus] = useState("Syncing..."); // UI Feedback
+  const [clockOffset, setClockOffset] = useState(0); 
+  const clockOffsetRef = useRef(0); // Ref to avoid stale closures in socket usage
+  const latestSyncPacket = useRef(null); // Store last packet for late-join catchup
+
+  const [syncStatus, setSyncStatus] = useState("Syncing..."); 
 
   const [isPlaying, setIsPlaying] = useState(false);
   const playerRef = useRef(null);
@@ -54,6 +57,7 @@ function App() {
       
       console.log("Clock Offset Calculated:", medianOffset, "ms");
       setClockOffset(medianOffset);
+      clockOffsetRef.current = medianOffset; // Update Ref
       setSyncStatus(`Synced (Offset: ${Math.round(medianOffset)}ms)`);
     };
 
@@ -97,6 +101,10 @@ function App() {
     // NEW: TIME SYNC LISTENER
     socket.on("receive_time", (data) => {
       if (role === "host") return; 
+      
+      // Store latest packet (even if player not ready)
+      latestSyncPacket.current = data;
+
       if (!playerRef.current) return;
 
       const { videoTime, sendingTimestamp } = data;
@@ -106,7 +114,7 @@ function App() {
         
         // 1. CALCULATE GLOBAL NOW
         const now = Date.now();
-        const globalNow = now + clockOffset;
+        const globalNow = now + clockOffsetRef.current; // Use Ref!
 
         // 2. CALCULATE TIME PASSED SINCE HOST SENTIT
         const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000; // seconds
@@ -164,7 +172,7 @@ function App() {
           try {
             const currentTime = playerRef.current.getCurrentTime();
             // Send Current Video Time + Timestamp of sending (Global Time)
-            const globalNow = Date.now() + clockOffset;
+            const globalNow = Date.now() + clockOffsetRef.current; // Use Ref
             socket.emit("time_update", { 
               room, 
               videoTime: currentTime,
@@ -249,6 +257,18 @@ function App() {
     // If joining a room that is already playing, force play
     if (isPlaying) {
       event.target.playVideo();
+    }
+    
+    // CHECK FOR LATE JOIN SYNC
+    if (latestSyncPacket.current && role !== "host") {
+       const { videoTime, sendingTimestamp } = latestSyncPacket.current;
+       const now = Date.now();
+       const globalNow = now + clockOffsetRef.current;
+       const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000;
+       const expectedTime = videoTime + timePassedSinceSend;
+       
+       console.log(`Late Join Sync seeking to: ${expectedTime}`);
+       event.target.seekTo(expectedTime + 0.2, true);
     }
   };
 
