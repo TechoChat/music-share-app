@@ -332,17 +332,17 @@
 /* --- ADMIN SEARCH BAR --- */
 .search-container {
   display: flex;
-  gap: 10px;
+  gap: 5px; /* Reduced gap */
   margin-bottom: 2rem;
   width: 100%;
-  max-width: 500px;
 }
 
 .search-container input {
   flex: 1;
+  min-width: 0; /* Allow shrinking */
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
-  padding: 12px 20px;
+  padding: 10px 15px; /* Slightly smaller padding */
   border-radius: 25px;
   color: white;
   outline: none;
@@ -356,10 +356,12 @@
 .add-btn {
   background: var(--primary);
   border: none;
-  padding: 0 25px;
+  padding: 0 15px; /* Reduced padding from 25px */
   border-radius: 25px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap; /* Prevent text wrap */
+  font-size: 0.9rem;
 }
 
 /* --- LEAVE BUTTON --- */
