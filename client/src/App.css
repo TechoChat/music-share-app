@@ -468,10 +468,11 @@
 
 .active-rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-  max-height: 200px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Slightly wider cards */
+  gap: 15px;
+  max-height: 300px; /* More space */
   overflow-y: auto;
+  padding: 5px; /* Prevent shadow cutout */
 }
 
 .room-card {
@@ -528,6 +529,45 @@
   }
   
   .queue-section {
-    max-height: 300px;
+    max-height: none; /* Let it grow or handle scroll better */
+    height: auto;
+  }
+
+  /* FULLSCREEN SEARCH ON MOBILE */
+  .search-wrapper {
+    position: static; /* Allow dropdown to escape relative container */
+  }
+
+  .search-dropdown {
+    position: fixed;
+    top: 60px; /* Below header */
+    left: 10px;
+    right: 10px;
+    bottom: 20px;
+    height: auto;
+    max-height: 70vh;
+    z-index: 2000;
+    backdrop-filter: blur(20px);
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid var(--primary);
+    box-shadow: 0 0 50px rgba(0,0,0,0.9);
+  }
+
+  .search-result-item {
+    padding: 15px; /* Larger touch target */
+  }
+
+  .search-result-item img {
+    width: 80px; /* Larger thumb */
+  }
+
+  .result-title {
+    font-size: 1.1rem; /* Larger text */
+  }
+  
+  .roomContainer .header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
   }
 }
