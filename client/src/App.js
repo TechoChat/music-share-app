@@ -307,6 +307,16 @@ function App() {
     return `${min}:${sec < 10 ? "0" + sec : sec}`;
   };
 
+  // --- PLAYER UTILS ---
+  const opts = {
+    height: "0",
+    width: "0",
+    playerVars: { autoplay: 1, controls: 0 },
+  };
+
+  const togglePlay = () => { if (playerRef.current) playerRef.current.playVideo(); };
+  const togglePause = () => { if (playerRef.current) playerRef.current.pauseVideo(); };
+
   const handleSeek = (e) => {
     if (role !== "host") return; // Only host can seek
     
