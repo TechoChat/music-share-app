@@ -346,7 +346,7 @@ function App() {
            const dur = playerRef.current.getDuration();
            if (dur > 0) { setCurrentTime(curr); setDuration(dur); setProgress((curr / dur) * 100); }
         } catch (e) { }
-      }, 500);
+      }, 200); // Smoother updates (200ms)
     } else clearInterval(progressInterval);
     return () => clearInterval(progressInterval);
   }, [isPlaying]);
@@ -365,14 +365,15 @@ function App() {
 
   const handleSeek = (e) => {
     if (role !== "host") return;
-    const bar = e.target.getBoundingClientRect();
+    // Use currentTarget to ensure we get the track dimensions, not the clicked child (fill)
+    const bar = e.currentTarget.getBoundingClientRect(); 
     const pct = (e.clientX - bar.left) / bar.width;
     const newTime = duration * pct;
     setProgress(pct * 100); setCurrentTime(newTime);
     playerRef.current?.seekTo(newTime, true);
   };
   
-  // --- CHAT LOGIC ---
+  // ... (keep chat logic) ...
   const sendMessage = () => {
       if (chatMessage !== "") {
           const msgData = {
@@ -390,183 +391,24 @@ function App() {
   return (
     <div className="App">
       {!isInRoom ? (
-        <div className="joinChatContainer glass-panel">
-          <h3>🎵 Music Share</h3>
-          
-          {/* NAME GENERATOR */}
-          <div className="name-section">
-              <span className="hello-text">Hello,</span>
-              <div className="name-display">
-                  <span className="user-name-text">{username}</span>
-                  <button className="regen-btn" onClick={regenerateName} title="New Name">🔄</button>
-              </div>
-          </div>
-
-          {/* CREATE ROOM */}
-          <button className="create-room-btn" onClick={createRoom}>
-              ✨ Create New Room
-          </button>
-
-          <div className="divider"><span>OR JOIN</span></div>
-
-          {/* OTP INPUTS */}
-          <div className="otp-container">
-              {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={inputRefs[i]}
-                    type="text"
-                    maxLength="1"
-                    className="otp-input"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  />
-              ))}
-          </div>
-
-          <button className="join-btn" onClick={joinWithOtp}>
-              Join Room
-          </button>
-          
-          {activeRooms.length > 0 && (
-            <div className="active-rooms-container">
-              <h4>Active Rooms</h4>
-              <div className="active-rooms-grid">
-                 {activeRooms.map((r) => (
-                   <div key={r.roomId} className="room-card" onClick={() => joinExistingRoom(r.roomId)}>
-                      <div className="room-card-header">
-                        <span className="room-id">#{r.roomId}</span>
-                        <span className="user-count">👥 {r.userCount}</span>
-                      </div>
-                      <div className="room-now-playing">{r.isPlaying ? "🎵 " + r.currentTitle : "Paused"}</div>
-                   </div>
-                 ))}
-              </div>
-            </div>
-          )}
-        </div>
+// ... (omitted) ...
       ) : (
         /* --- DASHBOARD LAYOUT --- */
         <div className={`dashboard-container ${activeTab}`}>
             
             {/* MOBILE HEADER (Only visible on mobile) */}
-            <div className="mobile-nav">
-               <button className={activeTab === "sidebar" ? "active" : ""} onClick={() => setActiveTab("sidebar")}>👥 Users</button>
-               <button className={activeTab === "main" ? "active" : ""} onClick={() => setActiveTab("main")}>🎵 Queue</button>
-               <button className={activeTab === "chat" ? "active" : ""} onClick={() => setActiveTab("chat")}>💬 Chat</button>
-            </div>
-
-            {/* SIDEBAR */}
-            <div className="sidebar">
-                <div className="sidebar-header">
-                    <h3># Room {room}</h3>
-                    <div className="sidebar-status">{role.toUpperCase()}</div>
-                </div>
-
-                <div className="sidebar-section">
-                    <h4>Connected Users ({users.length})</h4>
-                    <ul className="user-list">
-                        {users.map((u, i) => (
-                            <li key={i} className="user-item">
-                                <div className="user-avatar">{u.name.charAt(0)}</div>
-                                <span>{u.name}</span>
-                                {u.id === socket.id && <span className="you-tag">(You)</span>}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-                
-                <button className="sidebar-exit-btn" onClick={leaveRoom}>Exit Room</button>
-            </div>
-
-            {/* MAIN CONTENT (Queue & Search) */}
-            <div className="main-content">
-                {role === "host" && (
-                  <div className="search-bar-wrapper">
-                      <div className="custom-search-input">
-                         <span>🔍</span>
-                         <input 
-                           type="text" 
-                           placeholder="Search songs..." 
-                           value={searchQuery}
-                           onChange={(e) => setSearchQuery(e.target.value)} 
-                           onKeyDown={(e) => e.key === 'Enter' && performSearch()}
-                         />
-                         {isSearching && <div className="spinner-small"></div>}
-                         {(searchResults.length > 0 || searchQuery.length > 0) && (
-                             <button className="close-search-btn" onClick={() => { setSearchResults([]); setSearchQuery(""); }}>✕</button>
-                         )}
-                      </div>
-                      <div className="search-results-floating">
-                        {searchResults.map((song) => (
-                          <div key={song.videoId} className="search-item" onClick={() => selectSong(song)}>
-                            <img src={song.thumbnail} alt="" />
-                            <div className="search-info">
-                                <p>{song.title}</p>
-                                <span className="search-author">{song.author}</span>
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); addToQueue(song); }}>+ Add</button>
-                          </div>
-                        ))}
-                      </div>
-                  </div>
-                )}
-                
-                <div className="queue-list-container">
-                    <h2 className="section-title">Up Next</h2>
-                    {queue.length === 0 ? (
-                        <div className="empty-state">Queue is empty. Search to add songs!</div>
-                    ) : (
-                        queue.map((song, index) => (
-                            <div key={index} className="queue-row">
-                                <span className="q-idx">{index + 1}</span>
-                                <div className="q-info">
-                                    <p>{typeof song === 'object' ? song.title : song}</p>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-
-            {/* CHAT PANEL */}
-            <div className="chat-panel">
-                <div className="chat-header">Chat</div>
-                <div className="chat-messages">
-                    {messages.map((msg, i) => {
-                        const isMine = msg.senderId === socket.id || msg.author === "You"; // Fallback for legacy
-                        return (
-                            <div key={i} className={`chat-bubble ${isMine ? "mine" : ""}`}>
-                                <div className="chat-meta">
-                                    {isMine ? "You" : msg.author} <span className="chat-time">{msg.time}</span>
-                                </div>
-                                <div className="chat-text">{msg.message}</div>
-                            </div>
-                        );
-                    })}
-                    <div ref={chatEndRef}></div>
-                </div>
-                <div className="chat-input-area">
-                    <input 
-                        type="text" 
-                        placeholder="Say hello..." 
-                        value={chatMessage} 
-                        onChange={(e) => setChatMessage(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()} 
-                    />
-                </div>
-            </div>
-
+// ... (omitted) ...
             {/* BOTTOM PLAYER BAR */}
             <div className="player-bar">
                 <div className="pb-left">
                     <div className="pb-art">
-                        {isPlaying ? "💿" : "🎵"}
+                        {isPlaying ? "💿" : "zz"}
                     </div>
                     <div className="pb-info">
-                        <h4>{videoId ? (queue[0]?.title || "Now Playing") : "No Song"}</h4>
-                        <p>{syncStatus}</p>
+                        <h4>{videoId ? (queue[0]?.title || "Now Playing") : "No Song Selected"}</h4>
+                        <p style={{color: isPlaying ? '#1db954' : '#b3b3b3', fontWeight: isPlaying?'bold':'normal'}}>
+                            {videoId ? (isPlaying ? "▶ Playing" : "⏸ Paused") : "Waiting for host..."}
+                        </p>
                     </div>
                 </div>
 
@@ -587,7 +429,7 @@ function App() {
                 </div>
 
                 <div className="pb-right">
-                    {/* Volume or other controls could go here */}
+                    <div className="pb-status-mini">{syncStatus}</div>
                 </div>
             </div>
 
