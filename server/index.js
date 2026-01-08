@@ -3,6 +3,7 @@ const app = express();
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const ytSearch = require("yt-search"); // Import yt-search
 
 app.use(cors());
 
@@ -125,6 +126,24 @@ io.on("connection", (socket) => {
       io.to(data.room).emit("receive_song", nextSong);
       io.to(data.room).emit("update_queue", room.queue);
       io.to(data.room).emit("receive_action", "play");
+    }
+  });
+
+  // --- SEARCH HANDLER ---
+  socket.on("search_song", async (query) => {
+    try {
+      const r = await ytSearch(query);
+      const videos = r.videos.slice(0, 10).map(v => ({
+        title: v.title,
+        videoId: v.videoId,
+        timestamp: v.timestamp,
+        thumbnail: v.thumbnail,
+        author: v.author.name
+      }));
+      socket.emit("search_results", videos);
+    } catch (e) {
+      console.error("Search error:", e);
+      socket.emit("search_results", []);
     }
   });
   

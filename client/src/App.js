@@ -12,6 +12,7 @@ function App() {
   const [role, setRole] = useState("");
   const [videoId, setVideoId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]); // Array of search results
   const [queue, setQueue] = useState([]);
   
   // SYNC STATE
@@ -153,12 +154,18 @@ function App() {
       }
     });
 
+    // NEW: SEARCH RESULTS LISTENER
+    socket.on("search_results", (results) => {
+      setSearchResults(results);
+    });
+
     return () => {
       socket.off("user_role");
       socket.off("receive_song");
       socket.off("receive_action");
       socket.off("update_queue");
       socket.off("receive_time");
+      socket.off("search_results");
     };
   }, [role]); // Re-bind if role changes
 
@@ -216,15 +223,30 @@ function App() {
 
   // --- PLAYER CONTROLS ---
 
-  const loadSong = () => {
+  // Trigger search on typing (debounced ideally, but button for now)
+  const performSearch = () => {
     if (!searchQuery) return;
-    socket.emit("play_song", { room, videoId: searchQuery });
+    socket.emit("search_song", searchQuery);
+  };
+
+  const selectSong = (song) => {
+    socket.emit("play_song", { room, videoId: song.videoId });
+    setSearchResults([]); // Clear results
     setSearchQuery("");
   };
 
-  const addToQueue = () => {
+  const addToQueue = (song) => {
+    if (!song) return; // Modified to accept song object or current search
+    const id = song ? song.videoId : searchQuery;
+    socket.emit("add_to_queue", { room, videoId: id });
+    setSearchResults([]);
+    setSearchQuery("");
+  };
+
+  const loadSong = () => {
+    // Legacy direct ID load
     if (!searchQuery) return;
-    socket.emit("add_to_queue", { room, videoId: searchQuery });
+    socket.emit("play_song", { room, videoId: searchQuery });
     setSearchQuery("");
   };
 
@@ -394,15 +416,34 @@ function App() {
             {/* RIGHT: QUEUE & ACTIONS */}
             <div className="queue-section">
                {role === "host" && (
-                 <div className="search-container">
-                    <input 
-                      type="text" 
-                      placeholder="Paste YouTube ID..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)} 
-                    />
-                    <button className="add-btn" onClick={loadSong}>Play</button>
-                    <button className="add-btn secondary-btn" onClick={addToQueue} style={{background: '#444'}}>+Q</button>
+                 <div className="search-wrapper"> {/* Container for search + dropdown */}
+                   <div className="search-container">
+                      <input 
+                        type="text" 
+                        placeholder="Search song name..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)} 
+                        onKeyDown={(e) => e.key === 'Enter' && performSearch()}
+                      />
+                      <button className="add-btn" onClick={performSearch}>Search</button>
+                   </div>
+                   
+                   {/* DROPDOWN RESULTS */}
+                   {searchResults.length > 0 && (
+                     <div className="search-dropdown glass-panel">
+                       {searchResults.map((song) => (
+                         <div key={song.videoId} className="search-result-item" onClick={() => selectSong(song)}>
+                           <img src={song.thumbnail} alt="art" />
+                           <div className="result-info">
+                             <p className="result-title">{song.title}</p>
+                             <span className="result-meta">{song.timestamp} • {song.author}</span>
+                           </div>
+                           <button className="result-add-q" onClick={(e) => { e.stopPropagation(); addToQueue(song); }}>+Q</button>
+                         </div>
+                       ))}
+                       <button className="close-search" onClick={() => setSearchResults([])}>Close Results</button>
+                     </div>
+                   )}
                  </div>
                )}
 
