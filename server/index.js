@@ -154,6 +154,17 @@ io.on("connection", (socket) => {
     socket.currentRoom = null;
   });
 
+  // --- NTP SYNC HANDLER ---
+  socket.on("sync_time", (data, callback) => {
+    // Client sends their local time (t0). We return server time (t1).
+    // Client receives it at (t2).
+    // Latency = (t2 - t0) / 2
+    // ClockOffset = t1 - t0 - Latency
+    callback({
+      serverTime: Date.now()
+    });
+  });
+
   socket.on("disconnect", () => {
     handleLeave();
     console.log("User Disconnected", socket.id);

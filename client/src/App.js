@@ -14,8 +14,51 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [queue, setQueue] = useState([]);
   
+  // SYNC STATE
+  const [clockOffset, setClockOffset] = useState(0); // MyTime + Offset = ServerTime
+  const [syncStatus, setSyncStatus] = useState("Syncing..."); // UI Feedback
+
   const [isPlaying, setIsPlaying] = useState(false);
   const playerRef = useRef(null);
+
+  // --- CLOCK SYNCHRONIZATION (NTP-like) ---
+  useEffect(() => {
+    const syncClock = async () => {
+      const pings = [];
+      const PING_COUNT = 10;
+
+      for (let i = 0; i < PING_COUNT; i++) {
+        const t0 = Date.now();
+        await new Promise(resolve => {
+          socket.emit("sync_time", {}, (response) => {
+            const t1 = response.serverTime;
+            const t2 = Date.now();
+            const latency = (t2 - t0) / 2;
+            const offset = t1 - t2 + latency; // t1 = server time, t2 = local receipt time. 
+            // Correct formula: ClientTime + Offset = ServerTime => Offset = ServerTime - ClientTime
+            // We use t2 (msg received) as "now". At t2, Server was at t1 + latency (approx).
+            // Actually: 
+            // Server = t1. Client = t0. Latency = (t2 - t0) / 2.
+            // At moment t1 (server), Client was at t0 + latency.
+            // Offset = t1 - (t0 + latency).
+            
+            pings.push(t1 - (t0 + latency));
+            resolve();
+          });
+        });
+      }
+
+      // Sort and take median to avoid outliers
+      pings.sort((a, b) => a - b);
+      const medianOffset = pings[Math.floor(pings.length / 2)];
+      
+      console.log("Clock Offset Calculated:", medianOffset, "ms");
+      setClockOffset(medianOffset);
+      setSyncStatus(`Synced (Offset: ${Math.round(medianOffset)}ms)`);
+    };
+
+    syncClock();
+  }, []);
 
   // --- SOCKET LISTENERS ---
   useEffect(() => {
@@ -51,28 +94,52 @@ function App() {
     });
     
     // NEW: TIME SYNC LISTENER
-    socket.on("receive_time", (hostTime) => {
-      if (role === "host") return; // Host determines the time
+    // NEW: TIME SYNC LISTENER
+    socket.on("receive_time", (data) => {
+      if (role === "host") return; 
       if (!playerRef.current) return;
+
+      const { videoTime, sendingTimestamp } = data;
 
       try {
         const myTime = playerRef.current.getCurrentTime();
         
-        // 1. LATENCY COMPENSATION
-        // Assume it took ~350ms for the signal to travel from Host -> Server -> You
-        const estimatedHostTime = hostTime + 0.35; 
+        // 1. CALCULATE GLOBAL NOW
+        const now = Date.now();
+        const globalNow = now + clockOffset;
 
-        const diff = Math.abs(myTime - estimatedHostTime);
+        // 2. CALCULATE TIME PASSED SINCE HOST SENTIT
+        const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000; // seconds
 
-        // 2. TIGHTER THRESHOLD (0.8 seconds)
-        // If we are off by more than 0.8s, we fix it.
-        // (Anything less than 0.8s is usually indistinguishable to the ear)
-        if (diff > 0.8) {
-          console.log(`Sync Drift: ${diff.toFixed(2)}s. Correcting...`);
-          
-          // Seek to the FUTURE time (where the host will be by the time we buffer)
-          playerRef.current.seekTo(estimatedHostTime, true);
+        // 3. CALCULATE WHERE THE VIDEO SHOULD BE
+        const expectedTime = videoTime + timePassedSinceSend;
+
+        const diff = expectedTime - myTime;
+
+        // 4. ADAPTIVE SYNC LOGIC
+        if (Math.abs(diff) > 2.0) {
+           // Major Desync: Seek
+           console.log(`Major Drift (${diff.toFixed(2)}s). Seeking...`);
+           playerRef.current.seekTo(expectedTime + 0.1, true); // +0.1 sync buffer
+        } else if (Math.abs(diff) > 0.05) {
+           // Minor Desync: Adjust Speed
+           // If we are behind (diff > 0), speed up. 
+           // If we are ahead (diff < 0), slow down.
+           const newRate = diff > 0 ? 1.05 : 0.95;
+           
+           // Only change if not already set (to avoid spamming player)
+           const currentRate = playerRef.current.getPlaybackRate();
+           if (currentRate !== newRate) {
+             console.log(`Minor Drift (${diff.toFixed(2)}s). Adjusting Rate to ${newRate}x`);
+             playerRef.current.setPlaybackRate(newRate);
+           }
+        } else {
+          // In Sync: Reset Speed
+           if (playerRef.current.getPlaybackRate() !== 1) {
+             playerRef.current.setPlaybackRate(1);
+           }
         }
+
       } catch (error) {
         console.error("Sync error:", error);
       }
@@ -96,7 +163,13 @@ function App() {
         if (playerRef.current && playerRef.current.getCurrentTime) {
           try {
             const currentTime = playerRef.current.getCurrentTime();
-            socket.emit("time_update", { room, time: currentTime });
+            // Send Current Video Time + Timestamp of sending (Global Time)
+            const globalNow = Date.now() + clockOffset;
+            socket.emit("time_update", { 
+              room, 
+              videoTime: currentTime,
+              sendingTimestamp: globalNow
+            });
           } catch (e) { /* Player not ready */ }
         }
       }, 500); // Broadcast every second
@@ -201,7 +274,7 @@ function App() {
           <div className="header">
             <div>
               <h2>Room: {room}</h2>
-              <span className="status">Role: {role.toUpperCase()}</span>
+              <span className="status">Role: {role.toUpperCase()} | {syncStatus}</span>
             </div>
             <button className="leave-btn" onClick={leaveRoom}>Exit Room</button>
           </div>
