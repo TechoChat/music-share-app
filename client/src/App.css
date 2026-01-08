@@ -1,22 +1,30 @@
 /* client/src/App.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* --- LAYOUT UTILS --- */
-.App {
-  width: 100vw;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
+:root {
+  --bg-dark: #000000;
+  --bg-panel: #121212;
+  --bg-hover: #2a2a2a;
+  --primary: #1DB954; /* Spotify Green */
+  --text-main: #fff;
+  --text-muted: #b3b3b3;
+  --border-light: rgba(255,255,255,0.1);
+  --sidebar-w: 240px;
+  --chat-w: 300px;
+  --player-h: 90px;
 }
 
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+body {
+  margin: 0;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden; /* App handles scrolling */
+}
+
+.App {
+  width: 100vw;
+  height: 100vh;
 }
 
 /* --- JOIN SCREEN --- */
@@ -586,29 +594,37 @@
   }
   
   .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .leave-btn {
-    width: 100%;
-    margin-top: 10px;
+    color: #888;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 20px;
   }
 
-  .main-grid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-    overflow: visible;
-    padding-bottom: 50px; /* Space for bottom scroll */
-  }
-  
-  .queue-section {
-    max-height: none; 
-    margin-bottom: 50px;
+  .mobile-nav button.active {
+    background: #333;
+    color: white;
   }
 
-  /* Player Section Adjustments */
+  /* When activeTab is "main", hide sidebar/chat */
+  .dashboard-container.main .sidebar, 
+  .dashboard-container.main .chat-panel { display: none; }
+  .dashboard-container.main .main-content { display: flex; flex: 1; }
+
+  /* When activeTab is "sidebar" */
+  .dashboard-container.sidebar .main-content, 
+  .dashboard-container.sidebar .chat-panel { display: none; }
+  .dashboard-container.sidebar .sidebar { display: flex; flex: 1; border: none; }
+
+  /* When activeTab is "chat" */
+  .dashboard-container.chat .main-content, 
+  .dashboard-container.chat .sidebar { display: none; }
+  .dashboard-container.chat .chat-panel { display: flex; flex: 1; border: none; }
+  
+  .player-bar {
+    position: relative; /* Stays at bottom of flex stack */
+    flex-shrink: 0;
+  }
+
   .album-art-container {
     width: 200px;
     height: 200px;

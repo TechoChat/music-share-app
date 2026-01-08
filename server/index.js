@@ -46,7 +46,18 @@ const rooms = {};
     // Send initial list
     broadcastRooms();
 
-  socket.on("join_room", (roomId) => {
+const animals = ["Panda", "Giraffe", "Lion", "Tiger", "Koala", "Penguin", "Eagle", "Falcon"];
+const adjectives = ["Cool", "Happy", "Swift", "Brave", "Calm", "Fierce", "Lucky", "Wise"];
+
+const generateName = () => {
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const animal = animals[Math.floor(Math.random() * animals.length)];
+    return `${adj} ${animal}`;
+};
+
+// ... existing code ...
+
+    socket.on("join_room", (roomId) => {
     // 1. ZOMBIE ROOM CLEANUP
     if (rooms[roomId]) {
       const roomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
@@ -59,6 +70,9 @@ const rooms = {};
 
     socket.join(roomId);
     socket.currentRoom = roomId;
+    
+    // Generate User Name
+    socket.username = generateName();
 
     // 2. CHECK IF ROOM EXISTS
     if (!rooms[roomId]) {
@@ -68,11 +82,12 @@ const rooms = {};
         currentVideo: null, 
         currentTitle: null,
         isPlaying: false,
-        queue: [] // Queue Array
+        queue: [],
+        users: [] // Track users explicitly
       };
       socket.emit("user_role", "host");
       console.log(`✅ Room ${roomId} created. Host: ${socket.id}`);
-      broadcastRooms(); // Update list
+      broadcastRooms(); 
     } else {
       // Room exists... BUT IS THE HOST ALIVE?
       const currentHostId = rooms[roomId].host;
@@ -103,6 +118,11 @@ const rooms = {};
          socket.emit("receive_action", "pause");
       }
     }
+    
+    // ADD USER TO LIST
+    rooms[roomId].users.push({ id: socket.id, name: socket.username });
+    io.to(roomId).emit("update_users", rooms[roomId].users); // Broadcast new list
+
     broadcastRooms(); // Update user/count
   });
 
@@ -183,12 +203,22 @@ const rooms = {};
     }
   });
   
+  // --- CHAT MSG HANDLER ---
+  socket.on("send_message", (data) => {
+      // data: { room, message, author, time }
+      io.to(data.room).emit("receive_message", data);
+  });
+  
   // --- HANDLE LEAVING ---
   const handleLeave = () => {
     const roomId = socket.currentRoom;
     if (!roomId || !rooms[roomId]) return;
 
     socket.leave(roomId);
+    
+    // REMOVE USER FROM LIST
+    rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
+    io.to(roomId).emit("update_users", rooms[roomId].users); // Update remaining users
     
     if (rooms[roomId].host === socket.id) {
        rooms[roomId].host = null;

@@ -66,103 +66,62 @@ function App() {
     syncClock();
   }, []);
 
-  // --- SOCKET LISTENERS ---
-  useEffect(() => {
-    socket.on("user_role", (role) => {
-      setRole(role);
-    });
+  // --- NEW STATE FOR CHAT & USERS ---
+  const [users, setUsers] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [chatMessage, setChatMessage] = useState("");
+  const chatEndRef = useRef(null);
 
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // --- SOCKET LISTENERS (Updated) ---
+  useEffect(() => {
+    socket.on("user_role", setRole);
     socket.on("receive_song", (id) => {
       setVideoId(id);
       setIsPlaying(true);
-      
-      // Force load to prevent "Paused" state on new tracks
-      if (playerRef.current && playerRef.current.internalPlayer) {
-        playerRef.current.internalPlayer.loadVideoById(id);
-      } else if (playerRef.current && playerRef.current.loadVideoById) {
-        playerRef.current.loadVideoById(id);
-      }
+      if (playerRef.current?.internalPlayer) playerRef.current.internalPlayer.loadVideoById(id);
+      else if (playerRef.current?.loadVideoById) playerRef.current.loadVideoById(id);
     });
 
     socket.on("receive_action", (action) => {
-      if (action === "play") {
-        setIsPlaying(true);
-        if (playerRef.current) playerRef.current.playVideo();
-      }
-      if (action === "pause") {
-        setIsPlaying(false);
-        if (playerRef.current) playerRef.current.pauseVideo();
-      }
+      if (action === "play") { setIsPlaying(true); playerRef.current?.playVideo(); }
+      if (action === "pause") { setIsPlaying(false); playerRef.current?.pauseVideo(); }
     });
 
-    socket.on("update_queue", (newQueue) => {
-      setQueue(newQueue);
-    });
+    socket.on("update_queue", setQueue);
     
-    // NEW: TIME SYNC LISTENER
-    // NEW: TIME SYNC LISTENER
+    // TIME SYNC
     socket.on("receive_time", (data) => {
       if (role === "host") return; 
-      
-      // Store latest packet (even if player not ready)
       latestSyncPacket.current = data;
-
       if (!playerRef.current) return;
-
       const { videoTime, sendingTimestamp } = data;
-
       try {
         const myTime = playerRef.current.getCurrentTime();
-        
-        // 1. CALCULATE GLOBAL NOW
-        const now = Date.now();
-        const globalNow = now + clockOffsetRef.current; // Use Ref!
-
-        // 2. CALCULATE TIME PASSED SINCE HOST SENTIT
-        const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000; // seconds
-
-        // 3. CALCULATE WHERE THE VIDEO SHOULD BE
+        const globalNow = Date.now() + clockOffsetRef.current;
+        const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000;
         const expectedTime = videoTime + timePassedSinceSend;
-
         const diff = expectedTime - myTime;
 
-        // 4. ADAPTIVE SYNC LOGIC
-        if (Math.abs(diff) > 2.0) {
-           // Major Desync: Seek
-           console.log(`Major Drift (${diff.toFixed(2)}s). Seeking...`);
-           playerRef.current.seekTo(expectedTime + 0.1, true); // +0.1 sync buffer
-        } else if (Math.abs(diff) > 0.05) {
-           // Minor Desync: Adjust Speed
-           // If we are behind (diff > 0), speed up. 
-           // If we are ahead (diff < 0), slow down.
-           const newRate = diff > 0 ? 1.05 : 0.95;
-           
-           // Only change if not already set (to avoid spamming player)
-           const currentRate = playerRef.current.getPlaybackRate();
-           if (currentRate !== newRate) {
-             console.log(`Minor Drift (${diff.toFixed(2)}s). Adjusting Rate to ${newRate}x`);
-             playerRef.current.setPlaybackRate(newRate);
-           }
-        } else {
-          // In Sync: Reset Speed
-           if (playerRef.current.getPlaybackRate() !== 1) {
-             playerRef.current.setPlaybackRate(1);
-           }
-        }
-
-      } catch (error) {
-        console.error("Sync error:", error);
-      }
+        if (Math.abs(diff) > 2.0) playerRef.current.seekTo(expectedTime + 0.1, true);
+        else if (Math.abs(diff) > 0.05) {
+          const newRate = diff > 0 ? 1.05 : 0.95;
+          if (playerRef.current.getPlaybackRate() !== newRate) playerRef.current.setPlaybackRate(newRate);
+        } else if (playerRef.current.getPlaybackRate() !== 1) playerRef.current.setPlaybackRate(1);
+      } catch (e) { }
     });
 
-    // NEW: SEARCH RESULTS LISTENER
-    socket.on("search_results", (results) => {
-      setSearchResults(results);
-    });
+    socket.on("search_results", setSearchResults);
+    socket.on("rooms_list", setActiveRooms);
 
-    // NEW: ACTIVE ROOMS LISTENER
-    socket.on("rooms_list", (rooms) => {
-      setActiveRooms(rooms);
+    // NEW EVENTS
+    socket.on("update_users", setUsers);
+    socket.on("receive_message", (msg) => {
+        setMessages((prev) => [...prev, msg]);
     });
 
     return () => {
@@ -173,164 +132,91 @@ function App() {
       socket.off("receive_time");
       socket.off("search_results");
       socket.off("rooms_list");
+      socket.off("update_users");
+      socket.off("receive_message");
     };
-  }, [role]); // Re-bind if role changes
+  }, [role]);
 
+  // ... (Keep Host Sync Broadcaster, Room Actions, Player Controls, Progress Logic as is) ...
   // --- HOST SYNC BROADCASTER ---
   useEffect(() => {
     let interval = null;
-
     if (role === "host" && isPlaying) {
       interval = setInterval(() => {
         if (playerRef.current && playerRef.current.getCurrentTime) {
           try {
             const currentTime = playerRef.current.getCurrentTime();
-            // Send Current Video Time + Timestamp of sending (Global Time)
-            const globalNow = Date.now() + clockOffsetRef.current; // Use Ref
-            socket.emit("time_update", { 
-              room, 
-              videoTime: currentTime,
-              sendingTimestamp: globalNow
-            });
-          } catch (e) { /* Player not ready */ }
+            const globalNow = Date.now() + clockOffsetRef.current;
+            socket.emit("time_update", { room, videoTime: currentTime, sendingTimestamp: globalNow });
+          } catch (e) { }
         }
-      }, 500); // Broadcast every second
+      }, 500);
     }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [role, isPlaying, room]);
 
-
-  // --- ROOM ACTIONS ---
-
-  const joinRoom = () => {
-    if (room !== "") {
-      socket.emit("join_room", room);
-      setIsInRoom(true);
-    }
-  };
-
+  const joinRoom = () => { if (room !== "") { socket.emit("join_room", room); setIsInRoom(true); } };
   const leaveRoom = () => {
     socket.emit("leave_room");
     setIsInRoom(false);
-    setVideoId("");
-    setRole("");
-    setIsPlaying(false);
-    setRoom("");
-    setQueue([]);
+    setVideoId(""); setRole(""); setIsPlaying(false); setRoom(""); setQueue([]); setMessages([]); setUsers([]);
   };
 
   useEffect(() => {
-    const handleTabClose = (event) => { socket.emit("leave_room"); };
+    const handleTabClose = () => { socket.emit("leave_room"); };
     window.addEventListener('beforeunload', handleTabClose);
     return () => { window.removeEventListener('beforeunload', handleTabClose); };
   }, []);
 
-  // --- PLAYER CONTROLS ---
-
-  // Trigger search on typing (debounced ideally, but button for now)
-  const performSearch = () => {
-    if (!searchQuery) return;
-    socket.emit("search_song", searchQuery);
-  };
-
+  const performSearch = () => { if (searchQuery) socket.emit("search_song", searchQuery); };
   const selectSong = (song) => {
-    socket.emit("play_song", { room, videoId: song.videoId });
-    setSearchResults([]); // Clear results
-    setSearchQuery("");
+    socket.emit("play_song", { room, videoId: song.videoId, title: song.title });
+    setSearchResults([]); setSearchQuery("");
   };
-
   const addToQueue = (song) => {
-    if (!song && !searchQuery) return; // Need song object OR simple query
-    
-    // If song object exists (from search), use it.
-    // If manual text input, title = videoId
+    if (!song && !searchQuery) return;
     const id = song ? song.videoId : searchQuery;
     const title = song ? song.title : searchQuery; 
-
     socket.emit("add_to_queue", { room, videoId: id, title: title });
-    setSearchResults([]);
-    setSearchQuery("");
+    setSearchResults([]); setSearchQuery("");
   };
-
-  const loadSong = () => {
-    // Legacy direct ID load
-    if (!searchQuery) return;
-    socket.emit("play_song", { room, videoId: searchQuery });
-    setSearchQuery("");
-  };
-
-  const playNext = () => {
-    if (queue.length > 0) {
-      socket.emit("play_next", { room });
-    }
-  };
+  const playNext = () => { if (queue.length > 0) socket.emit("play_next", { room }); };
 
   const handlePlayerStateChange = (event) => {
     if (role === "host") {
-      const playerState = event.data;
-      // 1 = Playing, 2 = Paused, 0 = Ended
-      if (playerState === 1) {
-        socket.emit("player_action", { room, action: "play" });
-        setIsPlaying(true);
-      }
-      if (playerState === 2) {
-        socket.emit("player_action", { room, action: "pause" });
-        setIsPlaying(false);
-      }
-      if (playerState === 0) {
-        playNext(); // Auto-play next song
-      }
+      const ps = event.data;
+      if (ps === 1) { socket.emit("player_action", { room, action: "play" }); setIsPlaying(true); }
+      if (ps === 2) { socket.emit("player_action", { room, action: "pause" }); setIsPlaying(false); }
+      if (ps === 0) playNext();
     }
   };
 
   const onPlayerReady = (event) => {
     playerRef.current = event.target;
-    // If joining a room that is already playing, force play
-    if (isPlaying) {
-      event.target.playVideo();
-    }
-    
-    // CHECK FOR LATE JOIN SYNC
+    if (isPlaying) event.target.playVideo();
     if (latestSyncPacket.current && role !== "host") {
        const { videoTime, sendingTimestamp } = latestSyncPacket.current;
-       const now = Date.now();
-       const globalNow = now + clockOffsetRef.current;
-       const timePassedSinceSend = (globalNow - sendingTimestamp) / 1000;
-       const expectedTime = videoTime + timePassedSinceSend;
-       
-       console.log(`Late Join Sync seeking to: ${expectedTime}`);
-       event.target.seekTo(expectedTime + 0.2, true);
+       const now = Date.now() + clockOffsetRef.current;
+       const expected = videoTime + ((now - sendingTimestamp) / 1000);
+       event.target.seekTo(expected + 0.2, true);
     }
   };
 
-  // --- PROGRESS BAR LOGIC ---
-  const [progress, setProgress] = useState(0); // 0-100
+  const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     let progressInterval;
-    
     if (isPlaying && playerRef.current) {
       progressInterval = setInterval(() => {
         try {
-          const curr = playerRef.current.getCurrentTime();
-          const dur = playerRef.current.getDuration();
-          
-          if (dur > 0) {
-            setCurrentTime(curr);
-            setDuration(dur);
-            setProgress((curr / dur) * 100);
-          }
+           const curr = playerRef.current.getCurrentTime();
+           const dur = playerRef.current.getDuration();
+           if (dur > 0) { setCurrentTime(curr); setDuration(dur); setProgress((curr / dur) * 100); }
         } catch (e) { }
-      }, 500); // 2 pushes per second for smoother UI
-    } else {
-      clearInterval(progressInterval);
-    }
-
+      }, 500);
+    } else clearInterval(progressInterval);
     return () => clearInterval(progressInterval);
   }, [isPlaying]);
 
@@ -341,43 +227,45 @@ function App() {
     return `${min}:${sec < 10 ? "0" + sec : sec}`;
   };
 
-  // --- PLAYER UTILS ---
-  const opts = {
-    height: "0",
-    width: "0",
-    playerVars: { autoplay: 1, controls: 0 },
-  };
-
-  const togglePlay = () => { if (playerRef.current) playerRef.current.playVideo(); };
-  const togglePause = () => { if (playerRef.current) playerRef.current.pauseVideo(); };
+  const opts = { height: "0", width: "0", playerVars: { autoplay: 1, controls: 0 } };
+  const togglePlay = () => { playerRef.current?.playVideo(); };
+  const togglePause = () => { playerRef.current?.pauseVideo(); };
 
   const handleSeek = (e) => {
-    if (role !== "host") return; // Only host can seek
-    
-    const progressBar = e.target.getBoundingClientRect();
-    const clickX = e.clientX - progressBar.left;
-    const percentage = clickX / progressBar.width;
-    const newTime = duration * percentage;
-    
-    // Optimistic Update
-    setProgress(percentage * 100);
-    setCurrentTime(newTime);
-    
-    if (playerRef.current) {
-      playerRef.current.seekTo(newTime, true);
-      // Optional: Emit seek event if needed, but time_update usually handles sync
-    }
+    if (role !== "host") return;
+    const bar = e.target.getBoundingClientRect();
+    const pct = (e.clientX - bar.left) / bar.width;
+    const newTime = duration * pct;
+    setProgress(pct * 100); setCurrentTime(newTime);
+    playerRef.current?.seekTo(newTime, true);
   };
+
+  // --- CHAT LOGIC ---
+  const sendMessage = () => {
+      if (chatMessage !== "") {
+          const msgData = {
+              room,
+              author: "You", // Better if we had proper names, but 'You' works for sender
+              message: chatMessage,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          socket.emit("send_message", msgData);
+          setChatMessage("");
+      }
+  };
+
+  // --- MOBILE UI STATE ---
+  const [activeTab, setActiveTab] = useState("main"); // "sidebar", "main", "chat"
 
   return (
     <div className="App">
       {!isInRoom ? (
+        // ... (Join Screen remains)
         <div className="joinChatContainer glass-panel">
           <h3>🎵 Music Share</h3>
           <input type="text" placeholder="Enter Room ID..." onChange={(e) => setRoom(e.target.value)} />
           <button onClick={joinRoom}>Join Room</button>
-
-          {/* ACTIVE ROOMS LIST */}
+          
           {activeRooms.length > 0 && (
             <div className="active-rooms-container">
               <h4>Active Rooms</h4>
@@ -388,9 +276,7 @@ function App() {
                         <span className="room-id">Room: {r.roomId}</span>
                         <span className="user-count">👥 {r.userCount}</span>
                       </div>
-                      <div className="room-now-playing">
-                        {r.isPlaying ? "🎵 " + r.currentTitle : "Paused"}
-                      </div>
+                      <div className="room-now-playing">{r.isPlaying ? "🎵 " + r.currentTitle : "Paused"}</div>
                    </div>
                  ))}
               </div>
@@ -398,118 +284,144 @@ function App() {
           )}
         </div>
       ) : (
-        <div className="roomContainer glass-panel">
-          <div className="header">
-            <div>
-              <h2>Room: {room}</h2>
-              <span className="status">Role: {role.toUpperCase()} | {syncStatus}</span>
-            </div>
-            <button className="leave-btn" onClick={leaveRoom}>Exit</button>
-          </div>
-
-          <div className="main-grid">
+        /* --- DASHBOARD LAYOUT --- */
+        <div className={`dashboard-container ${activeTab}`}>
             
-            {/* LEFT: PLAYER SECTION */}
-            <div className="player-section">
-              <div className={`album-art-container`}>
-                <div className={`album-art ${isPlaying ? "playing" : ""}`}>
-                  {isPlaying ? "🔊" : "🎵"}
-                </div>
-              </div>
-
-              <div className="song-details">
-                <h3>{videoId ? "Now Playing" : "No Song Selected"}</h3>
-                <p>ID: {videoId || "..."}</p>
-              </div>
-
-              <div className="progress-container">
-                <div className="progress-bar" onClick={handleSeek}>
-                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-                </div>
-                <div className="time-labels">
-                   <span>{formatTime(currentTime)}</span>
-                   <span>{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {role === "host" ? (
-              <div className="controls-row">
-                   <button className="control-btn main-play" onClick={() => isPlaying ? togglePause() : togglePlay()}>
-                     {isPlaying ? "⏸" : "▶"}
-                   </button>
-                   <button className="control-btn" onClick={playNext}>⏭</button>
-                </div>
-              ) : (
-                <div className="status-badge" style={{ marginTop: '20px' }}>
-                  {isPlaying ? "Listening with Host 🎧" : "Host Paused"}
-                </div>
-              )}
+            {/* MOBILE HEADER (Only visible on mobile) */}
+            <div className="mobile-nav">
+               <button className={activeTab === "sidebar" ? "active" : ""} onClick={() => setActiveTab("sidebar")}>👥 Users</button>
+               <button className={activeTab === "main" ? "active" : ""} onClick={() => setActiveTab("main")}>🎵 Queue</button>
+               <button className={activeTab === "chat" ? "active" : ""} onClick={() => setActiveTab("chat")}>💬 Chat</button>
             </div>
 
-            {/* RIGHT: QUEUE & ACTIONS */}
-            <div className="queue-section">
-               {role === "host" && (
-                 <div className="search-wrapper"> {/* Container for search + dropdown */}
-                   <div className="search-container">
-                      <input 
+            {/* SIDEBAR */}
+            <div className="sidebar">
+                <div className="sidebar-header">
+                    <h3># Room {room}</h3>
+                    <div className="sidebar-status">{role.toUpperCase()}</div>
+                </div>
+
+                <div className="sidebar-section">
+                    <h4>Connected Users ({users.length})</h4>
+                    <ul className="user-list">
+                        {users.map((u, i) => (
+                            <li key={i} className="user-item">
+                                <div className="user-avatar">{u.name.charAt(0)}</div>
+                                <span>{u.name}</span>
+                                {u.id === socket.id && <span className="you-tag">(You)</span>}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                
+                <button className="sidebar-exit-btn" onClick={leaveRoom}>Exit Room</button>
+            </div>
+
+            {/* MAIN CONTENT (Queue & Search) */}
+            <div className="main-content">
+                {role === "host" && (
+                  <div className="search-bar-wrapper">
+                      <div className="custom-search-input">
+                         <span>🔍</span>
+                         <input 
+                           type="text" 
+                           placeholder="Search songs..." 
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)} 
+                           onKeyDown={(e) => e.key === 'Enter' && performSearch()}
+                         />
+                      </div>
+                      <div className="search-results-floating">
+                        {searchResults.map((song) => (
+                          <div key={song.videoId} className="search-item" onClick={() => selectSong(song)}>
+                            <img src={song.thumbnail} alt="" />
+                            <div className="search-info">
+                                <p>{song.title}</p>
+                                <span>{song.author}</span>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); addToQueue(song); }}>+ Add</button>
+                          </div>
+                        ))}
+                      </div>
+                  </div>
+                )}
+                
+                <div className="queue-list-container">
+                    <h2 className="section-title">Up Next</h2>
+                    {queue.length === 0 ? (
+                        <div className="empty-state">Queue is empty. Search to add songs!</div>
+                    ) : (
+                        queue.map((song, index) => (
+                            <div key={index} className="queue-row">
+                                <span className="q-idx">{index + 1}</span>
+                                <div className="q-info">
+                                    <p>{typeof song === 'object' ? song.title : song}</p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* CHAT PANEL */}
+            <div className="chat-panel">
+                <div className="chat-header">Chat</div>
+                <div className="chat-messages">
+                    {messages.map((msg, i) => (
+                        <div key={i} className={`chat-bubble ${msg.author === "You" ? "mine" : ""}`}>
+                            <div className="chat-meta">{msg.author !== "You" && msg.author} <span className="chat-time">{msg.time}</span></div>
+                            <div className="chat-text">{msg.message}</div>
+                        </div>
+                    ))}
+                    <div ref={chatEndRef}></div>
+                </div>
+                <div className="chat-input-area">
+                    <input 
                         type="text" 
-                        placeholder="Search song name..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)} 
-                        onKeyDown={(e) => e.key === 'Enter' && performSearch()}
-                      />
-                      <button className="add-btn" onClick={performSearch}>Search</button>
-                   </div>
-                   
-                   {/* DROPDOWN RESULTS */}
-                   {searchResults.length > 0 && (
-                     <div className="search-dropdown glass-panel">
-                       {searchResults.map((song) => (
-                         <div key={song.videoId} className="search-result-item" onClick={() => selectSong(song)}>
-                           <img src={song.thumbnail} alt="art" />
-                           <div className="result-info">
-                             <p className="result-title">{song.title}</p>
-                             <span className="result-meta">{song.timestamp} • {song.author}</span>
-                           </div>
-                           <button className="result-add-q" onClick={(e) => { e.stopPropagation(); addToQueue(song); }}>+Q</button>
-                         </div>
-                       ))}
-                       <button className="close-search" onClick={() => setSearchResults([])}>Close Results</button>
-                     </div>
-                   )}
-                 </div>
-               )}
-
-               <div className="queue-header">
-                 <h3>Up Next ({queue.length})</h3>
-               </div>
-               
-               <ul className="queue-list">
-                 {queue.length === 0 ? (
-                   <li className="empty-queue" style={{color: '#888', fontStyle: 'italic'}}>Queue is empty</li>
-                 ) : (
-                   queue.map((song, index) => (
-                     <li key={index}>
-                       <span className="queue-number">#{index + 1}</span>
-                       {/* Handle both new object structure and old string structure for legacy support */}
-                       {typeof song === 'object' ? song.title : song} 
-                     </li>
-                   ))
-                 )}
-               </ul>
+                        placeholder="Say hello..." 
+                        value={chatMessage} 
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()} 
+                    />
+                </div>
             </div>
 
-          </div>
+            {/* BOTTOM PLAYER BAR */}
+            <div className="player-bar">
+                <div className="pb-left">
+                    <div className="pb-art">
+                        {isPlaying ? "💿" : "🎵"}
+                    </div>
+                    <div className="pb-info">
+                        <h4>{videoId ? (queue[0]?.title || "Now Playing") : "No Song"}</h4>
+                        <p>{syncStatus}</p>
+                    </div>
+                </div>
 
-          {/* HIDDEN PLAYER */}
-          <div className="hidden-player" style={{display: 'none'}}>
-            <YouTube
-              videoId={videoId}
-              opts={opts}
-              onReady={onPlayerReady}
-              onStateChange={handlePlayerStateChange}
-            />
-          </div>
+                <div className="pb-center">
+                    <div className="pb-controls">
+                        <button className="pb-btn" onClick={() => role === "host" && (isPlaying ? togglePause() : togglePlay())}>
+                            {isPlaying ? "⏸" : "▶"}
+                        </button>
+                        <button className="pb-btn" onClick={() => role === "host" && playNext()}>⏭</button>
+                    </div>
+                    <div className="pb-progress-row">
+                         <span>{formatTime(currentTime)}</span>
+                         <div className="pb-progress-track" onClick={handleSeek}>
+                             <div className="pb-progress-fill" style={{width: `${progress}%`}}></div>
+                         </div>
+                         <span>{formatTime(duration)}</span>
+                    </div>
+                </div>
+
+                <div className="pb-right">
+                    {/* Volume or other controls could go here */}
+                </div>
+            </div>
+
+            <div className="hidden-player" style={{display:'none'}}>
+                <YouTube videoId={videoId} opts={opts} onReady={onPlayerReady} onStateChange={handlePlayerStateChange} />
+            </div>
         </div>
       )}
     </div>
