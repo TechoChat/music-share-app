@@ -198,6 +198,10 @@ function App() {
   };
   const playNext = () => { if (queue.length > 0) socket.emit("play_next", { room }); };
 
+  // Ref for immediate state access in callbacks
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
   const handlePlayerStateChange = (event) => {
     if (role === "host") {
       const ps = event.data;
@@ -210,11 +214,11 @@ function App() {
   const onPlayerReady = (event) => {
     playerRef.current = event.target;
     
-    // Auto-play / Pause logic based on room state
-    if (isPlaying) {
+    // Auto-play / Pause logic based on room state (Use REF for fresh value)
+    if (isPlayingRef.current) {
       event.target.playVideo();
     } else {
-      // Important: loadVideoById usually auto-plays, so we must force pause if state is stopped
+      // Important: prevent auto-play if room is paused
       event.target.pauseVideo();
     }
     
@@ -224,18 +228,12 @@ function App() {
        const now = Date.now() + clockOffsetRef.current;
        
        // Calculate expected time
-       // If Paused, sendingTimestamp might be old, so we might just use videoTime.
-       // But assuming host sends time_update only when playing, or sendingTimestamp is accurate.
-       
-       // If IS PLAYING: Calculate drift.
-       // If PAUSED: Just seek to videoTime.
-       
        let expectedTime = videoTime;
-       if (isPlaying) {
+       if (isPlayingRef.current) {
           expectedTime = videoTime + ((now - sendingTimestamp) / 1000);
        }
        
-       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlaying})`);
+       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlayingRef.current})`);
        event.target.seekTo(expectedTime, true);
     }
   };
