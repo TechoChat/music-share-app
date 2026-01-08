@@ -1,358 +1,401 @@
 /* client/src/App.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
 
-body {
-  margin: 0;
-  padding: 0;
-  background-color: #121212; /* Dark Spotify-like background */
-  color: #ffffff;
-  font-family: 'Inter', sans-serif;
-}
-
+/* --- LAYOUT UTILS --- */
 .App {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 20px;
 }
 
-/* --- Join Room Screen --- */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* --- JOIN SCREEN --- */
 .joinChatContainer {
   display: flex;
   flex-direction: column;
   text-align: center;
-  background-color: #1e1e1e;
-  padding: 50px;
-  border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  width: 300px;
+  padding: 3rem;
+  width: 100%;
+  max-width: 400px;
+  animation: fadeIn 0.8s ease-out;
 }
 
 .joinChatContainer h3 {
-  margin-bottom: 20px;
-  font-size: 2rem;
-  color: #1db954; /* Spotify Green */
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  background: linear-gradient(to right, #fff, #b3b3b3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .joinChatContainer input {
-  height: 40px;
+  width: 100%;
+  padding: 15px;
   margin: 10px 0;
-  border: 2px solid #333;
-  border-radius: 5px;
-  padding: 0 10px;
-  font-size: 16px;
-  background-color: #2a2a2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.2);
   color: white;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: 0.3s;
+}
+
+.joinChatContainer input:focus {
   outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .joinChatContainer button {
-  height: 45px;
+  width: 100%;
+  padding: 15px;
   margin-top: 20px;
   border: none;
-  background-color: #1db954;
-  border-radius: 25px;
-  color: white;
-  font-size: 16px;
-  font-weight: bold;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #000;
+  font-weight: 700;
+  font-size: 1.1rem;
   cursor: pointer;
-  transition: 0.2s;
+  transition: 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .joinChatContainer button:hover {
-  background-color: #1ed760;
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px var(--primary-glow);
 }
 
-/* --- Inside Room Screen --- */
+/* --- ROOM CONTAINER --- */
 .roomContainer {
-  width: 90%;
-  max-width: 800px;
-  height: 80vh;
-  background-color: #1e1e1e;
-  border-radius: 15px;
+  width: 100%;
+  max-width: 1000px;
+  height: 85vh;
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #333;
-  padding-bottom: 15px;
-  margin-bottom: 20px;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
 .header h2 {
+  font-size: 1.5rem;
   margin: 0;
+  font-weight: 600;
 }
 
 .status {
-  font-size: 14px;
-  color: #888;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.05);
+  padding: 5px 10px;
+  border-radius: 20px;
+  margin-top: 5px;
+  display: inline-block;
 }
 
-/* Placeholders for future features */
-.music-player-placeholder {
+/* --- MAIN CONTENT GRID --- */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 350px; /* Player Left, Queue Right */
+  gap: 2rem;
   flex: 1;
-  background: #2a2a2a;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #555;
-  margin-bottom: 20px;
-  border: 2px dashed #444;
+  overflow: hidden;
 }
 
-.search-placeholder {
-  height: 50px;
-  background: #2a2a2a;
-  border-radius: 10px;
+/* --- PLAYER SECTION --- */
+.player-section {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  color: #888;
-  border: 1px solid #444;
+  align-items: center;
+  text-align: center;
 }
 
-/* --- Audio Player Interface --- */
-.audio-interface {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(145deg, #2a2a2a, #1e1e1e);
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  border: 1px solid #333;
+.album-art-container {
+  position: relative;
+  width: 250px;
+  height: 250px;
+  margin-bottom: 2rem;
 }
 
 .album-art {
-  width: 80px;
-  height: 80px;
-  background-color: #333;
-  border-radius: 8px;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #333, #111);
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 40px;
-  margin-right: 20px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  font-size: 4rem;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  position: relative;
+  z-index: 2;
 }
 
-.track-info h3 {
+/* Glow Effect */
+.album-art::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 20px;
+  background: var(--primary);
+  filter: blur(20px);
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.3s;
+}
+
+.album-art.playing::before {
+  opacity: 0.6;
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+  100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+.song-details h3 {
+  font-size: 1.8rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.song-details p {
+  color: var(--primary);
+  font-weight: 600;
   margin: 0;
-  font-size: 1.2rem;
-  color: white;
 }
 
-.track-info p {
-  margin: 5px 0 0;
-  color: #1db954; /* Spotify Green */
-  font-size: 0.9rem;
+/* --- PROGRESS BAR --- */
+.progress-container {
+  width: 100%;
+  max-width: 500px;
+  margin: 1.5rem 0;
 }
 
-/* --- Admin Controls --- */
-.admin-controls {
-  border-top: 1px solid #333;
-  padding-top: 20px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.search-bar input {
-  flex: 1;
-  background: #2a2a2a;
-  border: 1px solid #444;
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.playback-buttons {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  margin-top: 20px; /* Add spacing so they don't overlap search */
-  padding: 10px;
-  background-color: #222; /* distinct background */
-  border-radius: 10px;
-}
-
-.playback-buttons button {
-  padding: 12px 25px;
-  border-radius: 8px;
-  border: 2px solid #1db954; /* Green border */
-  font-weight: bold;
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  position: relative;
   cursor: pointer;
-  background-color: #1db954;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.time-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- CONTROLS --- */
+.controls-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.control-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   color: white;
-  font-size: 16px;
+  font-size: 1.2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
   transition: 0.2s;
 }
 
-.playback-buttons button:hover {
-  background-color: #1ed760;
-  transform: scale(1.05);
+.control-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.1);
 }
 
-/* --- Search Results Dropdown --- */
-.results-list {
+.control-btn.main-play {
+  width: 70px;
+  height: 70px;
+  background: var(--primary);
+  color: #000;
+  font-size: 1.8rem;
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+
+.control-btn.main-play:hover {
+  transform: scale(1.05);
+  background: #1ed760;
+}
+
+.control-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* --- QUEUE SECTION --- */
+.queue-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 15px;
-  max-height: 200px;
-  overflow-y: auto;
+  background: rgba(0,0,0,0.2);
+  border-radius: 15px;
+  padding: 1.5rem;
+  border: 1px solid rgba(255,255,255,0.05);
 }
 
-.search-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #252525;
-  padding: 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.search-item:hover {
-  background: #333;
-}
-
-.search-item img {
-  width: 40px;
-  border-radius: 4px;
-}
-
-/* --- New UI Features --- */
-
-/* 1. Status Badge (Playing vs Paused) */
-.status-badge {
-  display: inline-block;
-  margin-top: 10px;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.status-badge.playing {
-  background-color: rgba(29, 185, 84, 0.2); /* Transparent Green */
-  color: #1db954;
-  border: 1px solid #1db954;
-}
-
-.status-badge.paused {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #aaa;
-  border: 1px solid #555;
-}
-
-/* 2. Pulse Animation for Album Art */
-@keyframes pulse-animation {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(29, 185, 84, 0.7); }
-  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(29, 185, 84, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(29, 185, 84, 0); }
-}
-
-.album-art.pulse {
-  animation: pulse-animation 2s infinite;
-  border: 2px solid #1db954;
-}
-
-/* 3. Leave Button Style */
-.leave-btn {
-  background-color: #ff4b4b;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 5px;
-  color: white;
-  cursor: pointer;
-  margin-left: 15px;
-  font-weight: bold;
-}
-
-.leave-btn:hover {
-  background-color: #ff0000;
-}
-
-/* 4. Disabled Button State */
-button.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: #555 !important;
-  border-color: #555 !important;
-  transform: none !important;
-}
-
-/* ... existing CSS ... */
-
-/* Secondary Button (Add to Queue) */
-.secondary-btn {
-  background-color: #555 !important;
-  border: 1px solid #777 !important;
-  margin-left: 5px;
-}
-.secondary-btn:hover {
-  background-color: #666 !important;
-}
-
-/* Queue Container */
-.queue-container {
-  margin-top: 20px;
-  background-color: #252525;
-  padding: 15px;
-  border-radius: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.queue-container h3 {
-  margin-top: 0;
-  font-size: 16px;
-  border-bottom: 1px solid #444;
-  padding-bottom: 10px;
-  color: #ccc;
+.queue-header {
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 0.5rem;
 }
 
 .queue-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow-y: auto;
+  max-height: 400px;
 }
 
-.queue-list li {
-  padding: 8px;
-  border-bottom: 1px solid #333;
-  font-size: 14px;
+.queue-item {
   display: flex;
   align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  transition: 0.2s;
+  cursor: default;
 }
 
-.queue-list li:last-child {
-  border-bottom: none;
+.queue-item:hover {
+  background: rgba(255,255,255,0.05);
 }
 
 .queue-index {
-  color: #1db954;
-  margin-right: 10px;
-  font-weight: bold;
+  color: var(--primary);
+  font-weight: 700;
+  margin-right: 12px;
+  width: 20px;
 }
 
-.empty-queue {
-  color: #666;
-  font-style: italic;
-  text-align: center;
-  padding: 10px;
+/* --- ADMIN SEARCH BAR --- */
+.search-container {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.search-container input {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 12px 20px;
+  border-radius: 25px;
+  color: white;
+  outline: none;
+}
+
+.search-container input:focus {
+  border-color: var(--primary);
+  background: rgba(0,0,0,0.2);
+}
+
+.add-btn {
+  background: var(--primary);
+  border: none;
+  padding: 0 25px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- LEAVE BUTTON --- */
+.leave-btn {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.leave-btn:hover {
+  background: var(--danger);
+  color: white;
+}
+
+/* --- ANIMATIONS --- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 900px) {
+  .roomContainer {
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .queue-section {
+    max-height: 300px;
+  }
 }

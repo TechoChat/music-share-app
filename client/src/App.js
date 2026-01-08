@@ -272,94 +272,158 @@ function App() {
     }
   };
 
-  const opts = {
-    height: "0",
-    width: "0",
-    playerVars: { autoplay: 1, controls: 0 },
+  // --- PROGRESS BAR LOGIC ---
+  const [progress, setProgress] = useState(0); // 0-100
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    let progressInterval;
+    
+    if (isPlaying && playerRef.current) {
+      progressInterval = setInterval(() => {
+        try {
+          const curr = playerRef.current.getCurrentTime();
+          const dur = playerRef.current.getDuration();
+          
+          if (dur > 0) {
+            setCurrentTime(curr);
+            setDuration(dur);
+            setProgress((curr / dur) * 100);
+          }
+        } catch (e) { }
+      }, 500); // 2 pushes per second for smoother UI
+    } else {
+      clearInterval(progressInterval);
+    }
+
+    return () => clearInterval(progressInterval);
+  }, [isPlaying]);
+
+  const formatTime = (seconds) => {
+    if (!seconds) return "0:00";
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${sec < 10 ? "0" + sec : sec}`;
   };
 
-  const togglePlay = () => { if (playerRef.current) playerRef.current.playVideo(); };
-  const togglePause = () => { if (playerRef.current) playerRef.current.pauseVideo(); };
+  const handleSeek = (e) => {
+    if (role !== "host") return; // Only host can seek
+    
+    const progressBar = e.target.getBoundingClientRect();
+    const clickX = e.clientX - progressBar.left;
+    const percentage = clickX / progressBar.width;
+    const newTime = duration * percentage;
+    
+    // Optimistic Update
+    setProgress(percentage * 100);
+    setCurrentTime(newTime);
+    
+    if (playerRef.current) {
+      playerRef.current.seekTo(newTime, true);
+      // Optional: Emit seek event if needed, but time_update usually handles sync
+    }
+  };
 
   return (
     <div className="App">
       {!isInRoom ? (
-        <div className="joinChatContainer">
-          <h3>Music Room</h3>
-          <input type="text" placeholder="Room ID..." onChange={(e) => setRoom(e.target.value)} />
+        <div className="joinChatContainer glass-panel">
+          <h3>🎵 Music Share</h3>
+          <input type="text" placeholder="Enter Room ID..." onChange={(e) => setRoom(e.target.value)} />
           <button onClick={joinRoom}>Join Room</button>
         </div>
       ) : (
-        <div className="roomContainer">
+        <div className="roomContainer glass-panel">
           <div className="header">
             <div>
               <h2>Room: {room}</h2>
               <span className="status">Role: {role.toUpperCase()} | {syncStatus}</span>
             </div>
-            <button className="leave-btn" onClick={leaveRoom}>Exit Room</button>
+            <button className="leave-btn" onClick={leaveRoom}>Exit</button>
           </div>
 
-          <div className="audio-interface">
-            <div className={`album-art ${isPlaying ? "pulse" : ""}`}>
-              {isPlaying ? "🔊" : "🎵"}
-            </div>
-            <div className="track-info">
-              <h3>{videoId ? "Now Playing" : "No Song Selected"}</h3>
-              <p>ID: {videoId}</p>
-              <div className={`status-badge ${isPlaying ? "playing" : "paused"}`}>
-                {videoId ? (isPlaying ? "▶ Playing" : "⏸ Paused") : "Waiting for song..."}
+          <div className="main-grid">
+            
+            {/* LEFT: PLAYER SECTION */}
+            <div className="player-section">
+              <div className={`album-art-container`}>
+                <div className={`album-art ${isPlaying ? "playing" : ""}`}>
+                  {isPlaying ? "🔊" : "🎵"}
+                </div>
               </div>
+
+              <div className="song-details">
+                <h3>{videoId ? "Now Playing" : "No Song Selected"}</h3>
+                <p>ID: {videoId || "..."}</p>
+              </div>
+
+              <div className="progress-container">
+                <div className="progress-bar" onClick={handleSeek}>
+                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+                </div>
+                <div className="time-labels">
+                   <span>{formatTime(currentTime)}</span>
+                   <span>{formatTime(duration)}</span>
+                </div>
+              </div>
+
+              {role === "host" ? (
+                <div className="controls-row">
+                   <button className="control-btn" onClick={togglePause}>⏸</button>
+                   <button className="control-btn main-play" onClick={togglePlay}>▶</button>
+                   <button className="control-btn" onClick={playNext}>⏭</button>
+                </div>
+              ) : (
+                <div className="status-badge" style={{ marginTop: '20px' }}>
+                  {isPlaying ? "Listening with Host 🎧" : "Host Paused"}
+                </div>
+              )}
             </div>
+
+            {/* RIGHT: QUEUE & ACTIONS */}
+            <div className="queue-section">
+               {role === "host" && (
+                 <div className="search-container">
+                    <input 
+                      type="text" 
+                      placeholder="Paste YouTube ID..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)} 
+                    />
+                    <button className="add-btn" onClick={loadSong}>Play</button>
+                    <button className="add-btn secondary-btn" onClick={addToQueue} style={{background: '#444'}}>+Q</button>
+                 </div>
+               )}
+
+               <div className="queue-header">
+                 <h3>Up Next ({queue.length})</h3>
+               </div>
+               
+               <ul className="queue-list">
+                 {queue.length === 0 ? (
+                   <li className="empty-queue" style={{color: '#888', fontStyle: 'italic'}}>Queue is empty</li>
+                 ) : (
+                   queue.map((songId, index) => (
+                     <li key={index} className="queue-item">
+                       <span className="queue-index">{index + 1}.</span>
+                       <span>{songId}</span>
+                     </li>
+                   ))
+                 )}
+               </ul>
+            </div>
+
           </div>
 
-          <div className="hidden-player">
+          {/* HIDDEN PLAYER */}
+          <div className="hidden-player" style={{display: 'none'}}>
             <YouTube
               videoId={videoId}
               opts={opts}
               onReady={onPlayerReady}
               onStateChange={handlePlayerStateChange}
             />
-          </div>
-
-          {role === "host" && (
-            <div className="admin-controls">
-              <div className="search-bar">
-                <input 
-                  type="text" 
-                  placeholder="Search/Paste ID..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                />
-                <button onClick={loadSong}>Play Now</button>
-                <button onClick={addToQueue} className="secondary-btn">+ Queue</button>
-              </div>
-              <div className="playback-buttons">
-                <button onClick={togglePlay} disabled={!videoId} className={!videoId ? "disabled" : ""}>▶ Play</button>
-                <button onClick={togglePause} disabled={!videoId} className={!videoId ? "disabled" : ""}>⏸ Pause</button>
-                <button onClick={playNext} disabled={queue.length === 0} className={queue.length === 0 ? "disabled" : ""}>⏭ Next</button>
-              </div>
-            </div>
-          )}
-
-          {role === "listener" && (
-            <p style={{ marginTop: "20px", color: "#888" }}>
-              {isPlaying ? "Syncing with host... 🎧" : "Host has paused the music."}
-            </p>
-          )}
-
-          <div className="queue-container">
-            <h3>Up Next ({queue.length})</h3>
-            <ul className="queue-list">
-              {queue.length === 0 ? (
-                <li className="empty-queue">Queue is empty</li>
-              ) : (
-                queue.map((songId, index) => (
-                  <li key={index}>
-                    <span className="queue-index">{index + 1}.</span> {songId}
-                  </li>
-                ))
-              )}
-            </ul>
           </div>
         </div>
       )}
