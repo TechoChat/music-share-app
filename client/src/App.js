@@ -253,6 +253,126 @@ function App() {
 
   const joinRoom = () => { /* Deprecated by new UI, keep for safety or remove */ };
 
+  // --- MISSING FUNCTIONS RESTORED ---
+  const leaveRoom = () => {
+    socket.emit("leave_room");
+    setIsInRoom(false);
+    setVideoId(""); setRole(""); setIsPlaying(false); setRoom(""); setQueue([]); setMessages([]); setUsers([]);
+    // Reload active rooms
+  };
+
+  const performSearch = () => { if (searchQuery) socket.emit("search_song", searchQuery); };
+  
+  const selectSong = (song) => {
+    socket.emit("play_song", { room, videoId: song.videoId, title: song.title });
+    setSearchResults([]); setSearchQuery("");
+  };
+  
+  const addToQueue = (song) => {
+    if (!song && !searchQuery) return;
+    const id = song ? song.videoId : searchQuery;
+    const title = song ? song.title : searchQuery; 
+    socket.emit("add_to_queue", { room, videoId: id, title: title });
+    setSearchResults([]); setSearchQuery("");
+  };
+  
+  const playNext = () => { if (queue.length > 0) socket.emit("play_next", { room }); };
+
+  // Ref for immediate state access in callbacks
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  const handlePlayerStateChange = (event) => {
+    if (role === "host") {
+      const ps = event.data;
+      if (ps === 1) { socket.emit("player_action", { room, action: "play" }); setIsPlaying(true); }
+      if (ps === 2) { socket.emit("player_action", { room, action: "pause" }); setIsPlaying(false); }
+      if (ps === 0) playNext();
+    }
+  };
+
+  const onPlayerReady = (event) => {
+    playerRef.current = event.target;
+    
+    // Auto-play / Pause logic based on room state (Use REF for fresh value)
+    if (isPlayingRef.current) {
+      event.target.playVideo();
+    } else {
+      // Important: prevent auto-play if room is paused
+      event.target.pauseVideo();
+    }
+    
+    // SYNC for Late Joiners
+    if (latestSyncPacket.current && role !== "host") {
+       const { videoTime, sendingTimestamp } = latestSyncPacket.current;
+       const now = Date.now() + clockOffsetRef.current;
+       
+       // Calculate expected time
+       let expectedTime = videoTime;
+       if (isPlayingRef.current) {
+          expectedTime = videoTime + ((now - sendingTimestamp) / 1000);
+       }
+       
+       console.log(`Initial Sync Seeking to: ${expectedTime} (Playing: ${isPlayingRef.current})`);
+       event.target.seekTo(expectedTime, true);
+    }
+  };
+
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    let progressInterval;
+    if (isPlaying && playerRef.current) {
+      progressInterval = setInterval(() => {
+        try {
+           const curr = playerRef.current.getCurrentTime();
+           const dur = playerRef.current.getDuration();
+           if (dur > 0) { setCurrentTime(curr); setDuration(dur); setProgress((curr / dur) * 100); }
+        } catch (e) { }
+      }, 500);
+    } else clearInterval(progressInterval);
+    return () => clearInterval(progressInterval);
+  }, [isPlaying]);
+
+  const formatTime = (seconds) => {
+    if (!seconds) return "0:00";
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${sec < 10 ? "0" + sec : sec}`;
+  };
+
+  const opts = { height: "0", width: "0", playerVars: { autoplay: 0, controls: 0 } };
+  const togglePlay = () => { playerRef.current?.playVideo(); };
+  const togglePause = () => { playerRef.current?.pauseVideo(); };
+
+  const handleSeek = (e) => {
+    if (role !== "host") return;
+    const bar = e.target.getBoundingClientRect();
+    const pct = (e.clientX - bar.left) / bar.width;
+    const newTime = duration * pct;
+    setProgress(pct * 100); setCurrentTime(newTime);
+    playerRef.current?.seekTo(newTime, true);
+  };
+
+  // --- CHAT LOGIC ---
+  const sendMessage = () => {
+      if (chatMessage !== "") {
+          const msgData = {
+              room,
+              author: "You", // Better if we had proper names, but 'You' works for sender
+              message: chatMessage,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          socket.emit("send_message", msgData);
+          setChatMessage("");
+      }
+  };
+
+  // --- MOBILE UI STATE ---
+  const [activeTab, setActiveTab] = useState("main"); // "sidebar", "main", "chat"
+
   return (
     <div className="App">
       {!isInRoom ? (
@@ -366,7 +486,7 @@ function App() {
                             <img src={song.thumbnail} alt="" />
                             <div className="search-info">
                                 <p>{song.title}</p>
-                                <span>{song.author}</span>
+                                <span className="search-author">{song.author}</span>
                             </div>
                             <button onClick={(e) => { e.stopPropagation(); addToQueue(song); }}>+ Add</button>
                           </div>
