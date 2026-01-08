@@ -263,7 +263,7 @@ function App() {
     return `${min}:${sec < 10 ? "0" + sec : sec}`;
   };
 
-  const opts = { height: "0", width: "0", playerVars: { autoplay: 1, controls: 0 } };
+  const opts = { height: "0", width: "0", playerVars: { autoplay: 0, controls: 0 } };
   const togglePlay = () => { playerRef.current?.playVideo(); };
   const togglePause = () => { playerRef.current?.pauseVideo(); };
 
